@@ -1,0 +1,33 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+hotaru
+
+# Test binary
+*.test
+
+# Go workspace
+go.work
+go.work.sum
+
+# Output
+/bin/
+/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend (for later phases)
+node_modules/
+.next/
+.env*.local
