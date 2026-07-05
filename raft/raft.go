@@ -28,3 +28,39 @@ func (s NodeState) String() string {
 	}
 
 }
+
+type RaftNode struct {
+	mu sync.Mutex //persistent state
+	id int 
+	currentTerm int
+	votedFor int //candidateID that received vote and -1 if none
+	log []LogEntry 
+	state NodeState
+	commitIndex int //index of highest log entrt known to be commited
+	lastApplied int //index of highest log entry applied to state machine
+	peers []int
+}
+
+type LogEntry struct {
+	Term int 
+	Index int //position in log, 1-indexed
+	Command string
+}
+
+//for new raft node, every node starts as a follower state
+func NewRaftNode(id int, peers []int) *RaftNode {
+	node := &RaftNode{
+		id: id,
+		currentTerm: 0,
+		votedFor: -1,
+		log: make([]LogEntry, 0),
+		state: Follower,
+		commitIndex: 0,
+		lastApplied: 0,
+		peers: peers,
+	}
+
+	fmt.Printf("[node %d] created. state: %s, term: %d\n", node.id, node.state, node.currentTerm)
+	return node
+}
+
