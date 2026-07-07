@@ -64,3 +64,30 @@ func NewRaftNode(id int, peers []int) *RaftNode {
 	return node
 }
 
+func (rn *RaftNode) GetState() (NodeState, int) {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+	return rn.state, rn.currentTerm
+}
+
+func (rn *RaftNode) becomeFollower(term int) {
+	oldState := rn.state
+	oldTerm := rn.currentTerm
+	rn.state = Follower
+	rn.currentTerm = term
+	rn.votedFor = -1 
+	fmt.Printf("[Node %d] %s (term %d) → Follower (term %d)\n",
+		rn.id, oldState, oldTerm, term)
+}
+
+func (rn *RaftNode) becomeCandidate() {
+	rn.state = Candidate
+	rn.currentTerm++ 
+	rn.votedFor = rn.id 
+	fmt.Printf("[Node %d] → Candidate (term %d)\n", rn.id, rn.currentTerm)
+}
+
+func (rn *RaftNode) becomeLeader() {
+	rn.state = Leader
+	fmt.Printf("[Node %d] → Leader (term %d)\n", rn.id, rn.currentTerm)
+}
