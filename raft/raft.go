@@ -2,9 +2,11 @@ package raft
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"net/rpc"
 	"sync"
+	"time"
 )
 
 //nodestate represents 3 poissible states of a raft node
@@ -69,6 +71,8 @@ type RaftNode struct {
 	peers []int
 	peerPorts map[int]string
 	listener net.Listener
+	lastContact     time.Time
+	electionTimeout time.Duration
 }
 
 type LogEntry struct {
@@ -90,6 +94,9 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 		peers: peers,
 		peerPorts: ports,
 	}
+	node.resetElectionTimeout()
+	node.lastContact = time.Now()
+	go node.runElectionTimer()
 
 	fmt.Printf("[node %d] created. state: %s, term: %d\n", node.id, node.state, node.currentTerm)
 	return node
@@ -140,6 +147,7 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	} else {
 		fmt.Printf("[Node %d] Received Replication (AppendEntries) from Leader %d with %d entries in Term %d\n", rn.id, args.LeaderId, len(args.Entries), args.Term)
 	}
+	rn.lastContact = time.Now()
 	reply.Term = rn.currentTerm
 	reply.Success = true
 	return nil
@@ -238,5 +246,28 @@ func (rn *RaftNode) TestTriggerSendRPC(peerId int, isAppendEntries bool) {
 		fmt.Printf("[Node %d] Sending stub RequestVote to peer %d\n", rn.id, peerId)
 		ok := rn.sendRequestVote(peerId, args, &reply)
 		fmt.Printf("[Node %d] Peer %d RequestVote response: status=%t, replyTerm=%d, voteGranted=%t\n", rn.id, peerId, ok, reply.Term, reply.VoteGranted)
+	}
+}
+
+func (rn *RaftNode) resetElectionTimeout() {
+	ms := 150 + rand.Intn(150)
+	rn.electionTimeout = time.Duration(ms) * time.Millisecond
+}
+
+func (rn *RaftNode) runElectionTimer() {
+	for {
+		time.Sleep(10 * time.Millisecond)
+		rn.mu.Lock()
+		if rn.state == Leader {
+			rn.mu.Unlock()
+			continue
+		}
+		if time.Since(rn.lastContact) > rn.electionTimeout {
+			fmt.Printf("[Node %d] Election timeout expired. Starting election...\n", rn.id)
+			rn.becomeCandidate()
+			rn.resetElectionTimeout()
+			rn.lastContact = time.Now()
+		}
+		rn.mu.Unlock()
 	}
 }
