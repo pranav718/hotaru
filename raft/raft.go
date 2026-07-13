@@ -133,15 +133,50 @@ func (rn *RaftNode) becomeLeader() {
 func (rn *RaftNode) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
-	fmt.Printf("[Node %d] Received RequestVote from Candidate %d in Term %d\n", rn.id, args.CandidateId, args.Term)
+
+	// 1. Term check: Candidate term must be >= ours
+	if args.Term < rn.currentTerm {
+		reply.Term = rn.currentTerm
+		reply.VoteGranted = false
+		return nil
+	}
+
+	// 2. Discover higher term: Step down immediately
+	if args.Term > rn.currentTerm {
+		rn.becomeFollower(args.Term)
+	}
+
+	// 3. One vote per term: Grant if we haven't voted, or voted for this candidate
+	if rn.votedFor == -1 || rn.votedFor == args.CandidateId {
+		rn.votedFor = args.CandidateId
+		rn.lastContact = time.Now() // Granting vote resets our election timeout
+		reply.VoteGranted = true
+		fmt.Printf("[Node %d] Granted vote to Candidate %d in Term %d\n", rn.id, args.CandidateId, rn.currentTerm)
+	} else {
+		reply.VoteGranted = false
+		fmt.Printf("[Node %d] Denied vote to Candidate %d in Term %d (already voted for %d)\n", rn.id, args.CandidateId, rn.currentTerm, rn.votedFor)
+	}
+
 	reply.Term = rn.currentTerm
-	reply.VoteGranted = false
 	return nil
 }
 
 func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) error {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
+
+	// Reject if leader term is outdated
+	if args.Term < rn.currentTerm {
+		reply.Term = rn.currentTerm
+		reply.Success = false
+		return nil
+	}
+
+	// Discover higher term or equal term (when we are candidate)
+	if args.Term > rn.currentTerm || (args.Term == rn.currentTerm && rn.state == Candidate) {
+		rn.becomeFollower(args.Term)
+	}
+
 	if len(args.Entries) == 0 {
 		fmt.Printf("[Node %d] Received Heartbeat (AppendEntries) from Leader %d in Term %d\n", rn.id, args.LeaderId, args.Term)
 	} else {
@@ -267,7 +302,63 @@ func (rn *RaftNode) runElectionTimer() {
 			rn.becomeCandidate()
 			rn.resetElectionTimeout()
 			rn.lastContact = time.Now()
+
+			go rn.startElection()
 		}
 		rn.mu.Unlock()
+	}
+}
+
+func (rn *RaftNode) startElection() {
+	rn.mu.Lock()
+	if rn.state != Candidate {
+		rn.mu.Unlock()
+		return
+	}
+	term := rn.currentTerm
+	myId := rn.id
+	peers := rn.peers
+	rn.mu.Unlock()
+
+	votesGranted := 1 //self vote
+	votesMutex := sync.Mutex{}
+
+	for _, peerId := range peers {
+		go func(pid int) {
+			args := RequestVoteArgs{
+				Term:        term,
+				CandidateId: myId,
+			}
+			var reply RequestVoteReply
+			
+			ok := rn.sendRequestVote(pid, &args, &reply)
+			if !ok {
+				return
+			}
+
+			rn.mu.Lock()
+			defer rn.mu.Unlock()
+
+			//ignore response if no longer candidate or term is over
+			if rn.currentTerm != term || rn.state != Candidate {
+				return
+			}
+
+			//if peer has higher term, step down
+			if reply.Term > rn.currentTerm {
+				rn.becomeFollower(reply.Term)
+				return
+			}
+
+			if reply.VoteGranted {
+				votesMutex.Lock()
+				votesGranted++
+				// check for majority (including self)
+				if votesGranted > (len(peers)+1)/2 && rn.state == Candidate {
+					rn.becomeLeader()
+				}
+				votesMutex.Unlock()
+			}
+		}(peerId)
 	}
 }
