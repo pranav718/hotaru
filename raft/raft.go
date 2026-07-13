@@ -114,6 +114,7 @@ func (rn *RaftNode) becomeFollower(term int) {
 	rn.state = Follower
 	rn.currentTerm = term
 	rn.votedFor = -1 
+	rn.lastContact = time.Now()
 	fmt.Printf("[Node %d] %s (term %d) → Follower (term %d)\n",
 		rn.id, oldState, oldTerm, term)
 }
@@ -128,6 +129,7 @@ func (rn *RaftNode) becomeCandidate() {
 func (rn *RaftNode) becomeLeader() {
 	rn.state = Leader
 	fmt.Printf("[Node %d] → Leader (term %d)\n", rn.id, rn.currentTerm)
+	go rn.runHeartbeatLoop()
 }
 
 func (rn *RaftNode) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
@@ -360,5 +362,54 @@ func (rn *RaftNode) startElection() {
 				votesMutex.Unlock()
 			}
 		}(peerId)
+	}
+}
+
+func (rn *RaftNode) sendHeartbeats() {
+	rn.mu.Lock()
+	if rn.state != Leader {
+		rn.mu.Unlock()
+		return
+	}
+	term := rn.currentTerm
+	myId := rn.id
+	peers := rn.peers
+	rn.mu.Unlock()
+
+	for _, peerId := range peers {
+		go func(pid int) {
+			args := AppendEntriesArgs{
+				Term:     term,
+				LeaderId: myId,
+			}
+			var reply AppendEntriesReply
+			ok := rn.sendAppendEntries(pid, &args, &reply)
+			if !ok {
+				return
+			}
+
+			rn.mu.Lock()
+			defer rn.mu.Unlock()
+			if rn.currentTerm != term || rn.state != Leader {
+				return
+			}
+			if reply.Term > rn.currentTerm {
+				rn.becomeFollower(reply.Term)
+			}
+		}(peerId)
+	}
+}
+
+func (rn *RaftNode) runHeartbeatLoop() {
+	rn.sendHeartbeats()
+	for {
+		time.Sleep(50 * time.Millisecond)
+		rn.mu.Lock()
+		if rn.state != Leader {
+			rn.mu.Unlock()
+			return
+		}
+		rn.mu.Unlock()
+		rn.sendHeartbeats()
 	}
 }
