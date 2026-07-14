@@ -73,6 +73,8 @@ type RaftNode struct {
 	listener net.Listener
 	lastContact     time.Time
 	electionTimeout time.Duration
+	nextIndex       map[int]int
+	matchIndex      map[int]int
 }
 
 type LogEntry struct {
@@ -128,6 +130,12 @@ func (rn *RaftNode) becomeCandidate() {
 
 func (rn *RaftNode) becomeLeader() {
 	rn.state = Leader
+	rn.nextIndex = make(map[int]int)
+	rn.matchIndex = make(map[int]int)
+	for _, peerId := range rn.peers {
+		rn.nextIndex[peerId] = len(rn.log) + 1
+		rn.matchIndex[peerId] = 0
+	}
 	fmt.Printf("[Node %d] → Leader (term %d)\n", rn.id, rn.currentTerm)
 	go rn.runHeartbeatLoop()
 }
@@ -183,6 +191,12 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 		fmt.Printf("[Node %d] Received Heartbeat (AppendEntries) from Leader %d in Term %d\n", rn.id, args.LeaderId, args.Term)
 	} else {
 		fmt.Printf("[Node %d] Received Replication (AppendEntries) from Leader %d with %d entries in Term %d\n", rn.id, args.LeaderId, len(args.Entries), args.Term)
+		for _, entry := range args.Entries {
+			if entry.Index > len(rn.log) {
+				rn.log = append(rn.log, entry)
+				fmt.Printf("[Node %d] Appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
+			}
+		}
 	}
 	rn.lastContact = time.Now()
 	reply.Term = rn.currentTerm
@@ -365,7 +379,7 @@ func (rn *RaftNode) startElection() {
 	}
 }
 
-func (rn *RaftNode) sendHeartbeats() {
+func (rn *RaftNode) broadcastAppendEntries() {
 	rn.mu.Lock()
 	if rn.state != Leader {
 		rn.mu.Unlock()
@@ -378,10 +392,25 @@ func (rn *RaftNode) sendHeartbeats() {
 
 	for _, peerId := range peers {
 		go func(pid int) {
+			rn.mu.Lock()
+			if rn.state != Leader || rn.currentTerm != term {
+				rn.mu.Unlock()
+				return
+			}
+
+			next := rn.nextIndex[pid]
+			var entries []LogEntry
+			if len(rn.log) >= next {
+				entries = rn.log[next-1:]
+			}
+
 			args := AppendEntriesArgs{
 				Term:     term,
 				LeaderId: myId,
+				Entries:  entries,
 			}
+			rn.mu.Unlock()
+
 			var reply AppendEntriesReply
 			ok := rn.sendAppendEntries(pid, &args, &reply)
 			if !ok {
@@ -393,15 +422,25 @@ func (rn *RaftNode) sendHeartbeats() {
 			if rn.currentTerm != term || rn.state != Leader {
 				return
 			}
+
 			if reply.Term > rn.currentTerm {
 				rn.becomeFollower(reply.Term)
+				return
+			}
+
+			if reply.Success {
+				if len(entries) > 0 {
+					rn.nextIndex[pid] = next + len(entries)
+					rn.matchIndex[pid] = rn.nextIndex[pid] - 1
+					fmt.Printf("[Node %d] Replicated entries to peer %d successfully. nextIndex=%d, matchIndex=%d\n", rn.id, pid, rn.nextIndex[pid], rn.matchIndex[pid])
+				}
 			}
 		}(peerId)
 	}
 }
 
 func (rn *RaftNode) runHeartbeatLoop() {
-	rn.sendHeartbeats()
+	rn.broadcastAppendEntries()
 	for {
 		time.Sleep(50 * time.Millisecond)
 		rn.mu.Lock()
@@ -410,6 +449,24 @@ func (rn *RaftNode) runHeartbeatLoop() {
 			return
 		}
 		rn.mu.Unlock()
-		rn.sendHeartbeats()
+		rn.broadcastAppendEntries()
 	}
+}
+
+func (rn *RaftNode) Propose(command string) bool {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+
+	if rn.state != Leader {
+		return false
+	}
+
+	entry := LogEntry{
+		Term:    rn.currentTerm,
+		Index:   len(rn.log) + 1,
+		Command: command,
+	}
+	rn.log = append(rn.log, entry)
+	fmt.Printf("[Node %d] Leader appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
+	return true
 }
