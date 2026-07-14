@@ -14,27 +14,37 @@ func main() {
 		2: "127.0.0.1:8002",
 	}
 
-	node0 := raft.NewRaftNode(0, []int{1, 2}, ports)
-	node1 := raft.NewRaftNode(1, []int{0, 2}, ports)
-	node2 := raft.NewRaftNode(2, []int{0, 1}, ports)
-
-	if err := node0.StartServer(); err != nil {
-		fmt.Printf("error starting server 0: %v\n", err)
-		return
+	nodes := []*raft.RaftNode{
+		raft.NewRaftNode(0, []int{1, 2}, ports),
+		raft.NewRaftNode(1, []int{0, 2}, ports),
+		raft.NewRaftNode(2, []int{0, 1}, ports),
 	}
-	defer node0.StopServer()
 
-	if err := node1.StartServer(); err != nil {
-		fmt.Printf("error starting server 1: %v\n", err)
-		return
+	for i, node := range nodes {
+		if err := node.StartServer(); err != nil {
+			fmt.Printf("error starting server %d: %v\n", i, err)
+			return
+		}
+		defer node.StopServer()
 	}
-	defer node1.StopServer()
 
-	if err := node2.StartServer(); err != nil {
-		fmt.Printf("error starting server 2: %v\n", err)
-		return
+	time.Sleep(500 * time.Millisecond)
+
+	var leader *raft.RaftNode
+	for _, node := range nodes {
+		state, _ := node.GetState()
+		if state == raft.Leader {
+			leader = node
+			break
+		}
 	}
-	defer node2.StopServer()
 
-	time.Sleep(1 * time.Second)
+	if leader != nil {
+		fmt.Println("[Test] Leader found, proposing command...")
+		leader.Propose("SET x = 42")
+	} else {
+		fmt.Println("[Test] No leader found in time.")
+	}
+
+	time.Sleep(500 * time.Millisecond)
 }
