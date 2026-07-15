@@ -432,10 +432,19 @@ func (rn *RaftNode) broadcastAppendEntries() {
 				entries = rn.log[next-1:]
 			}
 
+			prevLogIndex := next - 1
+			prevLogTerm := 0
+			if prevLogIndex > 0 {
+				prevLogTerm = rn.log[prevLogIndex-1].Term
+			}
+
 			args := AppendEntriesArgs{
-				Term:     term,
-				LeaderId: myId,
-				Entries:  entries,
+				Term:         term,
+				LeaderId:     myId,
+				PrevLogIndex: prevLogIndex,
+				PrevLogTerm:  prevLogTerm,
+				Entries:      entries,
+				LeaderCommit: rn.commitIndex,
 			}
 			rn.mu.Unlock()
 
@@ -457,10 +466,12 @@ func (rn *RaftNode) broadcastAppendEntries() {
 			}
 
 			if reply.Success {
-				if len(entries) > 0 {
-					rn.nextIndex[pid] = next + len(entries)
-					rn.matchIndex[pid] = rn.nextIndex[pid] - 1
-					fmt.Printf("[Node %d] Replicated entries to peer %d successfully. nextIndex=%d, matchIndex=%d\n", rn.id, pid, rn.nextIndex[pid], rn.matchIndex[pid])
+				rn.nextIndex[pid] = next + len(entries)
+				rn.matchIndex[pid] = rn.nextIndex[pid] - 1
+			} else {
+				rn.nextIndex[pid] = rn.nextIndex[pid] - 1
+				if rn.nextIndex[pid] < 1 {
+					rn.nextIndex[pid] = 1
 				}
 			}
 		}(peerId)
