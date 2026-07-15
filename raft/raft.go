@@ -1,10 +1,12 @@
 package raft
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
 	"net/rpc"
+	"os"
 	"sync"
 	"time"
 )
@@ -75,6 +77,7 @@ type RaftNode struct {
 	electionTimeout time.Duration
 	nextIndex       map[int]int
 	matchIndex      map[int]int
+	killed          bool
 }
 
 type LogEntry struct {
@@ -98,6 +101,7 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 	}
 	node.resetElectionTimeout()
 	node.lastContact = time.Now()
+	node.readPersist()
 	go node.runElectionTimer()
 
 	fmt.Printf("[node %d] created. state: %s, term: %d\n", node.id, node.state, node.currentTerm)
@@ -115,16 +119,17 @@ func (rn *RaftNode) becomeFollower(term int) {
 	oldTerm := rn.currentTerm
 	rn.state = Follower
 	rn.currentTerm = term
-	rn.votedFor = -1 
+	rn.votedFor = -1
 	rn.lastContact = time.Now()
-	fmt.Printf("[Node %d] %s (term %d) → Follower (term %d)\n",
-		rn.id, oldState, oldTerm, term)
+	rn.persist()
+	fmt.Printf("[Node %d] %s (term %d) → Follower (term %d)\n", rn.id, oldState, oldTerm, term)
 }
 
 func (rn *RaftNode) becomeCandidate() {
 	rn.state = Candidate
 	rn.currentTerm++ 
 	rn.votedFor = rn.id 
+	rn.persist()
 	fmt.Printf("[Node %d] → Candidate (term %d)\n", rn.id, rn.currentTerm)
 }
 
@@ -160,6 +165,7 @@ func (rn *RaftNode) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) 
 	if rn.votedFor == -1 || rn.votedFor == args.CandidateId {
 		rn.votedFor = args.CandidateId
 		rn.lastContact = time.Now() //4.election timeout reset on granting vote
+		rn.persist()
 		reply.VoteGranted = true
 		fmt.Printf("[Node %d] Granted vote to Candidate %d in Term %d\n", rn.id, args.CandidateId, rn.currentTerm)
 	} else {
@@ -229,6 +235,7 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	rn.lastContact = time.Now()
 	reply.Term = rn.currentTerm
 	reply.Success = true
+	rn.persist()
 	return nil
 }
 
@@ -263,6 +270,7 @@ func (rn *RaftNode) StartServer() error {
 func (rn *RaftNode) StopServer() {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
+	rn.killed = true
 	if rn.listener != nil {
 		rn.listener.Close()
 	}
@@ -337,6 +345,10 @@ func (rn *RaftNode) runElectionTimer() {
 	for {
 		time.Sleep(10 * time.Millisecond)
 		rn.mu.Lock()
+		if rn.killed {
+			rn.mu.Unlock()
+			return
+		}
 		if rn.state == Leader {
 			rn.mu.Unlock()
 			continue
@@ -484,7 +496,7 @@ func (rn *RaftNode) runHeartbeatLoop() {
 	for {
 		time.Sleep(50 * time.Millisecond)
 		rn.mu.Lock()
-		if rn.state != Leader {
+		if rn.killed || rn.state != Leader {
 			rn.mu.Unlock()
 			return
 		}
@@ -507,6 +519,7 @@ func (rn *RaftNode) Propose(command string) bool {
 		Command: command,
 	}
 	rn.log = append(rn.log, entry)
+	rn.persist()
 	fmt.Printf("[Node %d] Leader appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
 	return true
 }
@@ -545,4 +558,51 @@ func (rn *RaftNode) TestSetLogAndTerm(term int, log []LogEntry) {
 	defer rn.mu.Unlock()
 	rn.currentTerm = term
 	rn.log = log
+	rn.persist()
+}
+
+type RaftState struct {
+	CurrentTerm int
+	VotedFor    int
+	Log         []LogEntry
+}
+
+func (rn *RaftNode) persist() {
+	state := RaftState{
+		CurrentTerm: rn.currentTerm,
+		VotedFor:    rn.votedFor,
+		Log:         rn.log,
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		fmt.Printf("[Node %d] Error marshaling state: %v\n", rn.id, err)
+		return
+	}
+	filename := fmt.Sprintf("raft_state_%d.json", rn.id)
+	err = os.WriteFile(filename, data, 0644)
+	if err != nil {
+		fmt.Printf("[Node %d] Error writing state file: %v\n", rn.id, err)
+	}
+}
+
+func (rn *RaftNode) readPersist() {
+	filename := fmt.Sprintf("raft_state_%d.json", rn.id)
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		fmt.Printf("[Node %d] Error reading state file: %v\n", rn.id, err)
+		return
+	}
+	var state RaftState
+	err = json.Unmarshal(data, &state)
+	if err != nil {
+		fmt.Printf("[Node %d] Error unmarshaling state: %v\n", rn.id, err)
+		return
+	}
+	rn.currentTerm = state.CurrentTerm
+	rn.votedFor = state.VotedFor
+	rn.log = state.Log
+	fmt.Printf("[Node %d] Loaded persisted state: Term %d, VotedFor %d, Log entries: %d\n", rn.id, rn.currentTerm, rn.votedFor, len(rn.log))
 }
