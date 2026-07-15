@@ -468,6 +468,7 @@ func (rn *RaftNode) broadcastAppendEntries() {
 			if reply.Success {
 				rn.nextIndex[pid] = next + len(entries)
 				rn.matchIndex[pid] = rn.nextIndex[pid] - 1
+				rn.updateLeaderCommit()
 			} else {
 				rn.nextIndex[pid] = rn.nextIndex[pid] - 1
 				if rn.nextIndex[pid] < 1 {
@@ -516,4 +517,32 @@ func (rn *RaftNode) applyLogs() {
 		entry := rn.log[rn.lastApplied-1]
 		fmt.Printf("[Node %d] Applied entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
 	}
+}
+
+func (rn *RaftNode) updateLeaderCommit() {
+	for n := len(rn.log); n > rn.commitIndex; n-- {
+		if rn.log[n-1].Term != rn.currentTerm {
+			continue
+		}
+
+		count := 1
+		for _, peerId := range rn.peers {
+			if rn.matchIndex[peerId] >= n {
+				count++
+			}
+		}
+
+		if count > (len(rn.peers)+1)/2 {
+			rn.commitIndex = n
+			rn.applyLogs()
+			break
+		}
+	}
+}
+
+func (rn *RaftNode) TestSetLogAndTerm(term int, log []LogEntry) {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+	rn.currentTerm = term
+	rn.log = log
 }
