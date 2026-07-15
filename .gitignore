@@ -31,3 +31,7 @@ Thumbs.db
 node_modules/
 .next/
 .env*.local
+
+# Raft persistent state files
+raft_state_*.json
+
