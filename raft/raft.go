@@ -144,22 +144,22 @@ func (rn *RaftNode) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) 
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
 
-	// 1. Term check: Candidate term must be >= ours
+	//1.candidate's term must be >= ours
 	if args.Term < rn.currentTerm {
 		reply.Term = rn.currentTerm
 		reply.VoteGranted = false
 		return nil
 	}
 
-	// 2. Discover higher term: Step down immediately
+	//2.step down if higher term 
 	if args.Term > rn.currentTerm {
 		rn.becomeFollower(args.Term)
 	}
 
-	// 3. One vote per term: Grant if we haven't voted, or voted for this candidate
+	//3.grant vote if we havent voted for anyone or voted for this candidate
 	if rn.votedFor == -1 || rn.votedFor == args.CandidateId {
 		rn.votedFor = args.CandidateId
-		rn.lastContact = time.Now() // Granting vote resets our election timeout
+		rn.lastContact = time.Now() //4.election timeout reset on granting vote
 		reply.VoteGranted = true
 		fmt.Printf("[Node %d] Granted vote to Candidate %d in Term %d\n", rn.id, args.CandidateId, rn.currentTerm)
 	} else {
@@ -175,16 +175,28 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
 
-	// Reject if leader term is outdated
 	if args.Term < rn.currentTerm {
 		reply.Term = rn.currentTerm
 		reply.Success = false
 		return nil
 	}
 
-	// Discover higher term or equal term (when we are candidate)
 	if args.Term > rn.currentTerm || (args.Term == rn.currentTerm && rn.state == Candidate) {
 		rn.becomeFollower(args.Term)
+	}
+
+	//consistency check to check if we have matching entry at PrevLogIndex
+	if args.PrevLogIndex > 0 {
+		if len(rn.log) < args.PrevLogIndex {
+			reply.Term = rn.currentTerm
+			reply.Success = false
+			return nil
+		}
+		if rn.log[args.PrevLogIndex-1].Term != args.PrevLogTerm {
+			reply.Term = rn.currentTerm
+			reply.Success = false
+			return nil
+		}
 	}
 
 	if len(args.Entries) == 0 {
