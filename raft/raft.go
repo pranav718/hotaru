@@ -204,12 +204,28 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	} else {
 		fmt.Printf("[Node %d] Received Replication (AppendEntries) from Leader %d with %d entries in Term %d\n", rn.id, args.LeaderId, len(args.Entries), args.Term)
 		for _, entry := range args.Entries {
-			if entry.Index > len(rn.log) {
+			if entry.Index <= len(rn.log) {
+				if rn.log[entry.Index-1].Term != entry.Term {
+					rn.log = rn.log[:entry.Index-1]
+					rn.log = append(rn.log, entry)
+					fmt.Printf("[Node %d] Appended entry locally (overwriting conflict): Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
+				}
+			} else {
 				rn.log = append(rn.log, entry)
 				fmt.Printf("[Node %d] Appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
 			}
 		}
 	}
+
+	//update commitIndex if leader has committed new entries
+	if args.LeaderCommit > rn.commitIndex {
+		rn.commitIndex = args.LeaderCommit
+		if len(rn.log) < rn.commitIndex {
+			rn.commitIndex = len(rn.log)
+		}
+		rn.applyLogs()
+	}
+
 	rn.lastContact = time.Now()
 	reply.Term = rn.currentTerm
 	reply.Success = true
@@ -481,4 +497,12 @@ func (rn *RaftNode) Propose(command string) bool {
 	rn.log = append(rn.log, entry)
 	fmt.Printf("[Node %d] Leader appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
 	return true
+}
+
+func (rn *RaftNode) applyLogs() {
+	for rn.commitIndex > rn.lastApplied {
+		rn.lastApplied++
+		entry := rn.log[rn.lastApplied-1]
+		fmt.Printf("[Node %d] Applied entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
+	}
 }
