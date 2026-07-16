@@ -78,6 +78,7 @@ type RaftNode struct {
 	nextIndex       map[int]int
 	matchIndex      map[int]int
 	killed          bool
+	kvStore         *KVStore
 }
 
 type LogEntry struct {
@@ -98,6 +99,7 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 		lastApplied: 0,
 		peers: peers,
 		peerPorts: ports,
+		kvStore: NewKVStore(),
 	}
 	node.resetElectionTimeout()
 	node.lastContact = time.Now()
@@ -528,7 +530,8 @@ func (rn *RaftNode) applyLogs() {
 	for rn.commitIndex > rn.lastApplied {
 		rn.lastApplied++
 		entry := rn.log[rn.lastApplied-1]
-		fmt.Printf("[Node %d] Applied entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
+		result := rn.kvStore.Apply(entry.Command)
+		fmt.Printf("[Node %d] Applied entry locally: Index %d, Term %d, Command '%s' -> Result: '%s'\n", rn.id, entry.Index, entry.Term, entry.Command, result)
 	}
 }
 
