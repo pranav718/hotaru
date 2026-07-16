@@ -609,3 +609,7 @@ func (rn *RaftNode) readPersist() {
 	rn.log = state.Log
 	fmt.Printf("[Node %d] Loaded persisted state: Term %d, VotedFor %d, Log entries: %d\n", rn.id, rn.currentTerm, rn.votedFor, len(rn.log))
 }
+
+func (rn *RaftNode) QueryKey(key string) string {
+	return rn.kvStore.Apply(fmt.Sprintf("GET %s", key))
+}
