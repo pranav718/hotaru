@@ -667,6 +667,52 @@ func (rn *RaftNode) readPersist() {
 	fmt.Printf("[Node %d] Loaded persisted state: Term %d, VotedFor %d, Log entries: %d\n", rn.id, rn.currentTerm, rn.votedFor, len(rn.log))
 }
 
+func (rn *RaftNode) VerifyLeadership() bool {
+	rn.mu.Lock()
+	if rn.state != Leader {
+		rn.mu.Unlock()
+		return false
+	}
+	term := rn.currentTerm
+	peers := make([]int, len(rn.peers))
+	copy(peers, rn.peers)
+	rn.mu.Unlock()
+
+	done := make(chan bool, len(peers))
+	for _, peerId := range peers {
+		go func(pid int) {
+			rn.mu.Lock()
+			args := AppendEntriesArgs{
+				Term:         term,
+				LeaderId:     rn.id,
+				PrevLogIndex: 0,
+				PrevLogTerm:  0,
+				Entries:      []LogEntry{},
+				LeaderCommit: 0,
+			}
+			rn.mu.Unlock()
+			var reply AppendEntriesReply
+			ok := rn.sendAppendEntries(pid, &args, &reply)
+			done <- ok && reply.Success
+		}(peerId)
+	}
+
+	responses := 1
+	timeout := time.After(100 * time.Millisecond)
+	for i := 0; i < len(peers); i++ {
+		select {
+		case success := <-done:
+			if success {
+				responses++
+			}
+		case <-timeout:
+			break
+		}
+	}
+
+	return responses > (len(peers)+1)/2
+}
+
 func (rn *RaftNode) QueryKey(key string) string {
 	return rn.kvStore.Apply(fmt.Sprintf("GET %s", key))
 }
