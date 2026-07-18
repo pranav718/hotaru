@@ -677,3 +677,16 @@ func (rn *RaftNode) GetLeaderId() int {
 	return rn.leaderId
 }
 
+func (rn *RaftNode) GetLeaderHTTPAddr() string {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+	if rn.leaderId == -1 {
+		return ""
+	}
+	rpcAddr, ok := rn.peerPorts[rn.leaderId]
+	if !ok {
+		return ""
+	}
+	return httpAddrFromRPC(rpcAddr)
+}
+
