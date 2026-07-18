@@ -114,6 +114,10 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 	return node
 }
 
+func (rn *RaftNode) GetId() int {
+	return rn.id
+}
+
 func (rn *RaftNode) GetState() (NodeState, int) {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
