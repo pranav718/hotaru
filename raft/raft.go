@@ -79,6 +79,8 @@ type RaftNode struct {
 	matchIndex      map[int]int
 	killed          bool
 	kvStore         *KVStore
+	httpServer      *HTTPServer
+	leaderId        int
 }
 
 type LogEntry struct {
@@ -100,7 +102,9 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 		peers: peers,
 		peerPorts: ports,
 		kvStore: NewKVStore(),
+		leaderId: -1,
 	}
+	node.httpServer = NewHTTPServer(node, httpAddrFromRPC(ports[id]))
 	node.resetElectionTimeout()
 	node.lastContact = time.Now()
 	node.readPersist()
@@ -122,6 +126,7 @@ func (rn *RaftNode) becomeFollower(term int) {
 	rn.state = Follower
 	rn.currentTerm = term
 	rn.votedFor = -1
+	rn.leaderId = -1
 	rn.lastContact = time.Now()
 	rn.persist()
 	fmt.Printf("[Node %d] %s (term %d) → Follower (term %d)\n", rn.id, oldState, oldTerm, term)
@@ -131,12 +136,14 @@ func (rn *RaftNode) becomeCandidate() {
 	rn.state = Candidate
 	rn.currentTerm++ 
 	rn.votedFor = rn.id 
+	rn.leaderId = -1
 	rn.persist()
 	fmt.Printf("[Node %d] → Candidate (term %d)\n", rn.id, rn.currentTerm)
 }
 
 func (rn *RaftNode) becomeLeader() {
 	rn.state = Leader
+	rn.leaderId = rn.id
 	rn.nextIndex = make(map[int]int)
 	rn.matchIndex = make(map[int]int)
 	for _, peerId := range rn.peers {
@@ -192,6 +199,7 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	if args.Term > rn.currentTerm || (args.Term == rn.currentTerm && rn.state == Candidate) {
 		rn.becomeFollower(args.Term)
 	}
+	rn.leaderId = args.LeaderId
 
 	//consistency check to check if we have matching entry at PrevLogIndex
 	if args.PrevLogIndex > 0 {
@@ -266,6 +274,10 @@ func (rn *RaftNode) StartServer() error {
 		}
 	}()
 	fmt.Printf("[Node %d] RPC server listening on port %s\n", rn.id, myPort)
+
+	if err := rn.httpServer.Start(); err != nil {
+		return fmt.Errorf("starting HTTP server: %v", err)
+	}
 	return nil
 }
 
@@ -275,6 +287,9 @@ func (rn *RaftNode) StopServer() {
 	rn.killed = true
 	if rn.listener != nil {
 		rn.listener.Close()
+	}
+	if rn.httpServer != nil {
+		rn.httpServer.Stop()
 	}
 }
 
@@ -507,12 +522,12 @@ func (rn *RaftNode) runHeartbeatLoop() {
 	}
 }
 
-func (rn *RaftNode) Propose(command string) bool {
+func (rn *RaftNode) Propose(command string) (int, bool) {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
 
 	if rn.state != Leader {
-		return false
+		return 0, false
 	}
 
 	entry := LogEntry{
@@ -523,8 +538,46 @@ func (rn *RaftNode) Propose(command string) bool {
 	rn.log = append(rn.log, entry)
 	rn.persist()
 	fmt.Printf("[Node %d] Leader appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
-	return true
+	return entry.Index, true
 }
+
+func (rn *RaftNode) ProposeAndCommit(command string) (string, error) {
+	index, isLeader := rn.Propose(command)
+	if !isLeader {
+		return "", fmt.Errorf("not leader")
+	}
+
+	start := time.Now()
+	for {
+		rn.mu.Lock()
+		killed := rn.killed
+		applied := rn.lastApplied >= index
+		var termMatches bool
+		if applied && index-1 < len(rn.log) {
+			termMatches = rn.log[index-1].Term == rn.currentTerm
+		}
+		rn.mu.Unlock()
+
+		if killed {
+			return "", fmt.Errorf("server stopped")
+		}
+
+		if applied {
+			if !termMatches {
+				return "", fmt.Errorf("command overwritten by a newer leader")
+			}
+			break
+		}
+
+		if time.Since(start) > 2*time.Second {
+			return "", fmt.Errorf("timeout waiting for command to commit")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	return "OK", nil
+}
+
 
 func (rn *RaftNode) applyLogs() {
 	for rn.commitIndex > rn.lastApplied {
@@ -613,3 +666,10 @@ func (rn *RaftNode) readPersist() {
 func (rn *RaftNode) QueryKey(key string) string {
 	return rn.kvStore.Apply(fmt.Sprintf("GET %s", key))
 }
+
+func (rn *RaftNode) GetLeaderId() int {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+	return rn.leaderId
+}
+
