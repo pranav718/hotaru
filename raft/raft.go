@@ -77,6 +77,8 @@ type RaftNode struct {
 	kvStore         *KVStore
 	httpServer      *HTTPServer
 	leaderId        int
+	lastIncludedIndex int
+	lastIncludedTerm  int
 }
 
 type LogEntry struct {
@@ -99,6 +101,8 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 		peerPorts: ports,
 		kvStore: NewKVStore(),
 		leaderId: -1,
+		lastIncludedIndex: 0,
+		lastIncludedTerm:  0,
 	}
 	node.httpServer = NewHTTPServer(node, httpAddrFromRPC(ports[id]))
 	node.resetElectionTimeout()

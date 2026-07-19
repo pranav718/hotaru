@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -67,3 +68,21 @@ func (kv *KVStore) Apply(command string) string {
 		return fmt.Sprintf("ERR_UNKNOWN_ACTION_%s", action)
 	}
 }
+
+func (kv *KVStore) Snapshot() ([]byte, error) {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	return json.Marshal(kv.db)
+}
+
+func (kv *KVStore) Restore(snapshot []byte) error {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	var db map[string]string
+	if err := json.Unmarshal(snapshot, &db); err != nil {
+		return err
+	}
+	kv.db = db
+	return nil
+}
+
