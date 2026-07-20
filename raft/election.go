@@ -45,6 +45,8 @@ func (rn *RaftNode) startElection() {
 	term := rn.currentTerm
 	myId := rn.id
 	peers := rn.peers
+	lastLogIndex := rn.getLastLogIndex()
+	lastLogTerm := rn.getLastLogTerm()
 	rn.mu.Unlock()
 
 	votesGranted := 1 //self vote
@@ -53,8 +55,10 @@ func (rn *RaftNode) startElection() {
 	for _, peerId := range peers {
 		go func(pid int) {
 			args := RequestVoteArgs{
-				Term:        term,
-				CandidateId: myId,
+				Term:         term,
+				CandidateId:  myId,
+				LastLogIndex: lastLogIndex,
+				LastLogTerm:  lastLogTerm,
 			}
 			var reply RequestVoteReply
 			

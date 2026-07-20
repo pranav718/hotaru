@@ -151,7 +151,7 @@ func (rn *RaftNode) becomeLeader() {
 	rn.nextIndex = make(map[int]int)
 	rn.matchIndex = make(map[int]int)
 	for _, peerId := range rn.peers {
-		rn.nextIndex[peerId] = len(rn.log) + 1
+		rn.nextIndex[peerId] = rn.getLastLogIndex() + 1
 		rn.matchIndex[peerId] = 0
 	}
 	fmt.Printf("[Node %d] → Leader (term %d)\n", rn.id, rn.currentTerm)
@@ -162,20 +162,30 @@ func (rn *RaftNode) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) 
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
 
-	//1.candidate's term must be >= ours
+	// 1. Term check: Candidate term must be >= ours
 	if args.Term < rn.currentTerm {
 		reply.Term = rn.currentTerm
 		reply.VoteGranted = false
 		return nil
 	}
 
-	//2.step down if higher term 
+	// 2. Discover higher term: Step down immediately
 	if args.Term > rn.currentTerm {
 		rn.becomeFollower(args.Term)
 	}
 
+	upToDate := false
+	myLastTerm := rn.getLastLogTerm()
+	myLastIndex := rn.getLastLogIndex()
+
+	if args.LastLogTerm > myLastTerm {
+		upToDate = true
+	} else if args.LastLogTerm == myLastTerm && args.LastLogIndex >= myLastIndex {
+		upToDate = true
+	}
+
 	//3.grant vote if we havent voted for anyone or voted for this candidate
-	if rn.votedFor == -1 || rn.votedFor == args.CandidateId {
+	if (rn.votedFor == -1 || rn.votedFor == args.CandidateId) && upToDate {
 		rn.votedFor = args.CandidateId
 		rn.lastContact = time.Now() //4.election timeout reset on granting vote
 		rn.persist()
@@ -207,12 +217,12 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 
 	//consistency check to check if we have matching entry at PrevLogIndex
 	if args.PrevLogIndex > 0 {
-		if len(rn.log) < args.PrevLogIndex {
+		if rn.getLastLogIndex() < args.PrevLogIndex {
 			reply.Term = rn.currentTerm
 			reply.Success = false
 			return nil
 		}
-		if rn.log[args.PrevLogIndex-1].Term != args.PrevLogTerm {
+		if rn.getLogTerm(args.PrevLogIndex) != args.PrevLogTerm {
 			reply.Term = rn.currentTerm
 			reply.Success = false
 			return nil
@@ -224,9 +234,9 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	} else {
 		fmt.Printf("[Node %d] Received Replication (AppendEntries) from Leader %d with %d entries in Term %d\n", rn.id, args.LeaderId, len(args.Entries), args.Term)
 		for _, entry := range args.Entries {
-			if entry.Index <= len(rn.log) {
-				if rn.log[entry.Index-1].Term != entry.Term {
-					rn.log = rn.log[:entry.Index-1]
+			if entry.Index <= rn.getLastLogIndex() {
+				if rn.getLogTerm(entry.Index) != entry.Term {
+					rn.log = rn.log[:entry.Index-rn.lastIncludedIndex-1]
 					rn.log = append(rn.log, entry)
 					fmt.Printf("[Node %d] Appended entry locally (overwriting conflict): Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
 				}
@@ -237,11 +247,10 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 		}
 	}
 
-	//update commitIndex if leader has committed new entries
 	if args.LeaderCommit > rn.commitIndex {
 		rn.commitIndex = args.LeaderCommit
-		if len(rn.log) < rn.commitIndex {
-			rn.commitIndex = len(rn.log)
+		if rn.getLastLogIndex() < rn.commitIndex {
+			rn.commitIndex = rn.getLastLogIndex()
 		}
 		rn.applyLogs()
 	}
@@ -252,17 +261,6 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	rn.persist()
 	return nil
 }
-
-
-
-
-
-
-
-
-
-
-
 
 func (rn *RaftNode) GetLeaderId() int {
 	rn.mu.Lock()
@@ -283,3 +281,34 @@ func (rn *RaftNode) GetLeaderHTTPAddr() string {
 	return httpAddrFromRPC(rpcAddr)
 }
 
+func (rn *RaftNode) getLastLogIndex() int {
+	return rn.lastIncludedIndex + len(rn.log)
+}
+
+func (rn *RaftNode) getLastLogTerm() int {
+	if len(rn.log) == 0 {
+		return rn.lastIncludedTerm
+	}
+	return rn.log[len(rn.log)-1].Term
+}
+
+func (rn *RaftNode) getLogTerm(index int) int {
+	if index == rn.lastIncludedIndex {
+		return rn.lastIncludedTerm
+	}
+	if index > rn.lastIncludedIndex && index <= rn.getLastLogIndex() {
+		return rn.log[index-rn.lastIncludedIndex-1].Term
+	}
+	return 0
+}
+
+func (rn *RaftNode) getLogEntry(index int) LogEntry {
+	return rn.log[index-rn.lastIncludedIndex-1]
+}
+
+func (rn *RaftNode) getLogSlice(fromIndex int) []LogEntry {
+	if fromIndex <= rn.lastIncludedIndex {
+		return rn.log
+	}
+	return rn.log[fromIndex-rn.lastIncludedIndex-1:]
+}

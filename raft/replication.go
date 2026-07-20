@@ -26,14 +26,14 @@ func (rn *RaftNode) broadcastAppendEntries() {
 
 			next := rn.nextIndex[pid]
 			var entries []LogEntry
-			if len(rn.log) >= next {
-				entries = rn.log[next-1:]
+			if rn.getLastLogIndex() >= next {
+				entries = rn.getLogSlice(next)
 			}
 
 			prevLogIndex := next - 1
 			prevLogTerm := 0
 			if prevLogIndex > 0 {
-				prevLogTerm = rn.log[prevLogIndex-1].Term
+				prevLogTerm = rn.getLogTerm(prevLogIndex)
 			}
 
 			args := AppendEntriesArgs{
@@ -101,7 +101,7 @@ func (rn *RaftNode) Propose(command string) (int, bool) {
 
 	entry := LogEntry{
 		Term:    rn.currentTerm,
-		Index:   len(rn.log) + 1,
+		Index:   rn.getLastLogIndex() + 1,
 		Command: command,
 	}
 	rn.log = append(rn.log, entry)
@@ -122,8 +122,8 @@ func (rn *RaftNode) ProposeAndCommit(command string) (string, error) {
 		killed := rn.killed
 		applied := rn.lastApplied >= index
 		var termMatches bool
-		if applied && index-1 < len(rn.log) {
-			termMatches = rn.log[index-1].Term == rn.currentTerm
+		if applied && index <= rn.getLastLogIndex() {
+			termMatches = rn.getLogTerm(index) == rn.currentTerm
 		}
 		rn.mu.Unlock()
 
@@ -150,15 +150,15 @@ func (rn *RaftNode) ProposeAndCommit(command string) (string, error) {
 func (rn *RaftNode) applyLogs() {
 	for rn.commitIndex > rn.lastApplied {
 		rn.lastApplied++
-		entry := rn.log[rn.lastApplied-1]
+		entry := rn.getLogEntry(rn.lastApplied)
 		result := rn.kvStore.Apply(entry.Command)
 		fmt.Printf("[Node %d] Applied entry locally: Index %d, Term %d, Command '%s' -> Result: '%s'\n", rn.id, entry.Index, entry.Term, entry.Command, result)
 	}
 }
 
 func (rn *RaftNode) updateLeaderCommit() {
-	for n := len(rn.log); n > rn.commitIndex; n-- {
-		if rn.log[n-1].Term != rn.currentTerm {
+	for n := rn.getLastLogIndex(); n > rn.commitIndex; n-- {
+		if rn.getLogTerm(n) != rn.currentTerm {
 			continue
 		}
 
