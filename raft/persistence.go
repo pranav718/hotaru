@@ -42,6 +42,19 @@ func (rn *RaftNode) persist() {
 	}
 }
 
+func (rn *RaftNode) SaveSnapshot(snapshotData []byte) error {
+	filename := fmt.Sprintf("raft_snapshot_%d.bin", rn.id)
+	if err := os.WriteFile(filename, snapshotData, 0644); err != nil {
+		return fmt.Errorf("failed to write snapshot file: %v", err)
+	}
+	return nil
+}
+
+func (rn *RaftNode) ReadSnapshot() ([]byte, error) {
+	filename := fmt.Sprintf("raft_snapshot_%d.bin", rn.id)
+	return os.ReadFile(filename)
+}
+
 func (rn *RaftNode) readPersist() {
 	filename := fmt.Sprintf("raft_state_%d.json", rn.id)
 	data, err := os.ReadFile(filename)

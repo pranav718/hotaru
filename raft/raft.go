@@ -57,6 +57,18 @@ type AppendEntriesReply struct {
 	Success bool
 }
 
+type InstallSnapshotArgs struct {
+	Term              int
+	LeaderId          int
+	LastIncludedIndex int
+	LastIncludedTerm  int
+	Data              []byte
+}
+
+type InstallSnapshotReply struct {
+	Term int
+}
+
 type RaftNode struct {
 	mu sync.Mutex //persistent state
 	id int 
@@ -262,6 +274,59 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 	return nil
 }
 
+func (rn *RaftNode) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) error {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+
+	if args.Term < rn.currentTerm {
+		reply.Term = rn.currentTerm
+		return nil
+	}
+
+	if args.Term > rn.currentTerm {
+		rn.becomeFollower(args.Term)
+	}
+	rn.leaderId = args.LeaderId
+
+	if args.LastIncludedIndex <= rn.lastIncludedIndex {
+		reply.Term = rn.currentTerm
+		return nil
+	}
+
+	fmt.Printf("[Node %d] Installing snapshot from Leader %d up to index %d\n", rn.id, args.LeaderId, args.LastIncludedIndex)
+
+	if err := rn.kvStore.Restore(args.Data); err != nil {
+		fmt.Printf("[Node %d] Error restoring snapshot: %v\n", rn.id, err)
+		return err
+	}
+
+	if err := rn.SaveSnapshot(args.Data); err != nil {
+		fmt.Printf("[Node %d] Error saving snapshot: %v\n", rn.id, err)
+		return err
+	}
+
+	if args.LastIncludedIndex <= rn.getLastLogIndex() && rn.getLogTerm(args.LastIncludedIndex) == args.LastIncludedTerm {
+		rn.log = rn.getLogSlice(args.LastIncludedIndex + 1)
+	} else {
+		rn.log = make([]LogEntry, 0)
+	}
+
+	rn.lastIncludedIndex = args.LastIncludedIndex
+	rn.lastIncludedTerm = args.LastIncludedTerm
+
+	if args.LastIncludedIndex > rn.commitIndex {
+		rn.commitIndex = args.LastIncludedIndex
+	}
+	if args.LastIncludedIndex > rn.lastApplied {
+		rn.lastApplied = args.LastIncludedIndex
+	}
+
+	rn.persist()
+	rn.lastContact = time.Now()
+	reply.Term = rn.currentTerm
+	return nil
+}
+
 func (rn *RaftNode) GetLeaderId() int {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
@@ -311,4 +376,38 @@ func (rn *RaftNode) getLogSlice(fromIndex int) []LogEntry {
 		return rn.log
 	}
 	return rn.log[fromIndex-rn.lastIncludedIndex-1:]
+}
+
+func (rn *RaftNode) TakeSnapshot(index int) error {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+
+	if index <= rn.lastIncludedIndex {
+		return fmt.Errorf("snapshot index %d is already included in a previous snapshot (up to %d)", index, rn.lastIncludedIndex)
+	}
+
+	if index > rn.lastApplied {
+		return fmt.Errorf("cannot snapshot unapplied entries (index %d > lastApplied %d)", index, rn.lastApplied)
+	}
+
+	snapshotData, err := rn.kvStore.Snapshot()
+	if err != nil {
+		return fmt.Errorf("failed to take state machine snapshot: %v", err)
+	}
+
+	lastIncludedTerm := rn.getLogTerm(index)
+
+	// trim the log array to keep only the entries after 'index'
+	rn.log = rn.getLogSlice(index + 1)
+	rn.lastIncludedIndex = index
+	rn.lastIncludedTerm = lastIncludedTerm
+
+	rn.persist()
+
+	if err := rn.SaveSnapshot(snapshotData); err != nil {
+		return err
+	}
+
+	fmt.Printf("[Node %d] Snapshot created up to index %d (term %d), log trimmed, %d entries remaining\n", rn.id, index, lastIncludedTerm, len(rn.log))
+	return nil
 }
