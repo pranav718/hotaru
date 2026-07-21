@@ -136,6 +136,12 @@ func (rn *RaftNode) GetState() (NodeState, int) {
 	return rn.state, rn.currentTerm
 }
 
+func (rn *RaftNode) GetLastApplied() int {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+	return rn.lastApplied
+}
+
 func (rn *RaftNode) becomeFollower(term int) {
 	oldState := rn.state
 	oldTerm := rn.currentTerm

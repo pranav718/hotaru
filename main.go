@@ -69,6 +69,7 @@ func main() {
 
 	for i := 0; i < 3; i++ {
 		os.Remove(fmt.Sprintf("raft_state_%d.json", i))
+		os.Remove(fmt.Sprintf("raft_snapshot_%d.bin", i))
 	}
 
 	node0 := raft.NewRaftNode(0, []int{1, 2}, ports)
@@ -215,6 +216,77 @@ func main() {
 		fmt.Printf("[Test] Restarted Node 2: key 'y' deleted (expected) — %v\n", err)
 	} else {
 		fmt.Printf("[Test] Restarted Node 2: key 'y' = %q\n", val)
+	}
+
+	fmt.Println("\n=== Test 6: Log Compaction & InstallSnapshot ===")
+	// Step 1: Write keys to grow log
+	fmt.Println("[Test] Writing a, b, c to leader...")
+	if err := httpSet(httpPortFor(newLeader.GetId()), "a", "1"); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	if err := httpSet(httpPortFor(newLeader.GetId()), "b", "2"); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	if err := httpSet(httpPortFor(newLeader.GetId()), "c", "3"); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	time.Sleep(300 * time.Millisecond)
+
+	// Step 2: Trigger snapshot on the leader up to its lastApplied index
+	leaderApplied := newLeader.GetLastApplied()
+	fmt.Printf("[Test] Triggering snapshot on leader (Node %d) up to index %d...\n", newLeader.GetId(), leaderApplied)
+	if err := newLeader.TakeSnapshot(leaderApplied); err != nil {
+		fmt.Printf("FAIL: taking snapshot: %v\n", err)
+		return
+	}
+
+	// Step 3: Stop one follower (newNode2, which is index 2)
+	fmt.Println("[Test] Stopping Node 2...")
+	newNode2.StopServer()
+	time.Sleep(300 * time.Millisecond)
+
+	// Step 4: Write more keys to the leader while Node 2 is offline
+	fmt.Println("[Test] Writing d, e to leader while Node 2 is offline...")
+	if err := httpSet(httpPortFor(newLeader.GetId()), "d", "4"); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	if err := httpSet(httpPortFor(newLeader.GetId()), "e", "5"); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	time.Sleep(300 * time.Millisecond)
+
+	// Step 5: Trigger another snapshot on the leader to compact the new entries
+	leaderApplied2 := newLeader.GetLastApplied()
+	fmt.Printf("[Test] Triggering second snapshot on leader up to index %d...\n", leaderApplied2)
+	if err := newLeader.TakeSnapshot(leaderApplied2); err != nil {
+		fmt.Printf("FAIL: taking second snapshot: %v\n", err)
+		return
+	}
+
+	// Step 6: Restart Node 2
+	fmt.Println("[Test] Restarting Node 2...")
+	node2Recovered := raft.NewRaftNode(2, []int{0, 1}, ports)
+	if err := node2Recovered.StartServer(); err != nil {
+		fmt.Printf("error restarting server 2: %v\n", err)
+		return
+	}
+	defer node2Recovered.StopServer()
+	time.Sleep(800 * time.Millisecond)
+
+	// Step 7: Verify Node 2 successfully caught up and holds the state from the snapshot + new entries!
+	fmt.Println("[Test] Verifying Node 2 caught up after InstallSnapshot...")
+	for _, key := range []string{"a", "b", "c", "d", "e"} {
+		val, err := httpGet(httpPortFor(2), key)
+		if err != nil {
+			fmt.Printf("FAIL: node 2 get key %s: %v\n", key, err)
+		} else {
+			fmt.Printf("[Test] Node 2: key %q = %q\n", key, val)
+		}
 	}
 
 	fmt.Println("\n=== All HTTP integration tests complete ===")
