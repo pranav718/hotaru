@@ -25,6 +25,47 @@ func (rn *RaftNode) broadcastAppendEntries() {
 			}
 
 			next := rn.nextIndex[pid]
+
+			if next <= rn.lastIncludedIndex {
+				snapshotData, err := rn.ReadSnapshot()
+				if err != nil {
+					fmt.Printf("[Node %d] Error reading snapshot for peer %d: %v\n", rn.id, pid, err)
+					rn.mu.Unlock()
+					return
+				}
+
+				args := InstallSnapshotArgs{
+					Term:              term,
+					LeaderId:          myId,
+					LastIncludedIndex: rn.lastIncludedIndex,
+					LastIncludedTerm:  rn.lastIncludedTerm,
+					Data:              snapshotData,
+				}
+				rn.mu.Unlock()
+
+				var reply InstallSnapshotReply
+				ok := rn.sendInstallSnapshot(pid, &args, &reply)
+				if !ok {
+					return
+				}
+
+				rn.mu.Lock()
+				defer rn.mu.Unlock()
+				if rn.currentTerm != term || rn.state != Leader {
+					return
+				}
+
+				if reply.Term > rn.currentTerm {
+					rn.becomeFollower(reply.Term)
+					return
+				}
+
+				rn.nextIndex[pid] = args.LastIncludedIndex + 1
+				rn.matchIndex[pid] = args.LastIncludedIndex
+				rn.updateLeaderCommit()
+				return
+			}
+
 			var entries []LogEntry
 			if rn.getLastLogIndex() >= next {
 				entries = rn.getLogSlice(next)
@@ -209,6 +250,7 @@ func (rn *RaftNode) VerifyLeadership() bool {
 
 	responses := 1
 	timeout := time.After(100 * time.Millisecond)
+Loop:
 	for i := 0; i < len(peers); i++ {
 		select {
 		case success := <-done:
@@ -216,7 +258,7 @@ func (rn *RaftNode) VerifyLeadership() bool {
 				responses++
 			}
 		case <-timeout:
-			break
+			break Loop
 		}
 	}
 

@@ -88,6 +88,25 @@ func (rn *RaftNode) sendAppendEntries(peerId int, args *AppendEntriesArgs, reply
 	return true
 }
 
+func (rn *RaftNode) sendInstallSnapshot(peerId int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
+	port, ok := rn.peerPorts[peerId]
+	if !ok {
+		return false
+	}
+	client, err := rpc.Dial("tcp", port)
+	if err != nil {
+		fmt.Printf("[Node %d] Error dialing peer %d at port %s: %v\n", rn.id, peerId, port, err)
+		return false
+	}
+	defer client.Close()
+	err = client.Call("RaftNode.InstallSnapshot", args, reply)
+	if err != nil {
+		fmt.Printf("[Node %d] RPC Error calling InstallSnapshot on peer %d: %v\n", rn.id, peerId, err)
+		return false
+	}
+	return true
+}
+
 func (rn *RaftNode) TestTriggerSendRPC(peerId int, isAppendEntries bool) {
 	if isAppendEntries {
 		args := &AppendEntriesArgs{
