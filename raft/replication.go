@@ -268,3 +268,48 @@ Loop:
 func (rn *RaftNode) QueryKey(key string) string {
 	return rn.kvStore.Apply(fmt.Sprintf("GET %s", key))
 }
+
+func (rn *RaftNode) ProposeAddNode(peerID int, rpcAddr string) (int, bool) {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+
+	if rn.state != Leader {
+		return 0, false
+	}
+
+	entry := LogEntry{
+		Term:      rn.currentTerm,
+		Index:     rn.getLastLogIndex() + 1,
+		Command:   fmt.Sprintf("ADD_NODE %d %s", peerID, rpcAddr),
+		Type:      EntryAddNode,
+		TargetID:  peerID,
+		TargetRPC: rpcAddr,
+	}
+	rn.log = append(rn.log, entry)
+	rn.addPeer(peerID, rpcAddr)
+	rn.persist()
+	fmt.Printf("[Node %d] Leader appended AddNode entry locally: Index %d, Peer %d (%s)\n", rn.id, entry.Index, peerID, rpcAddr)
+	return entry.Index, true
+}
+
+func (rn *RaftNode) ProposeRemoveNode(peerID int) (int, bool) {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+
+	if rn.state != Leader {
+		return 0, false
+	}
+
+	entry := LogEntry{
+		Term:     rn.currentTerm,
+		Index:    rn.getLastLogIndex() + 1,
+		Command:  fmt.Sprintf("REMOVE_NODE %d", peerID),
+		Type:     EntryRemoveNode,
+		TargetID: peerID,
+	}
+	rn.log = append(rn.log, entry)
+	rn.removePeer(peerID)
+	rn.persist()
+	fmt.Printf("[Node %d] Leader appended RemoveNode entry locally: Index %d, Peer %d\n", rn.id, entry.Index, peerID)
+	return entry.Index, true
+}

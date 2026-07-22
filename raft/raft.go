@@ -93,10 +93,21 @@ type RaftNode struct {
 	lastIncludedTerm  int
 }
 
+type EntryType int
+
+const (
+	EntryCommand EntryType = iota
+	EntryAddNode
+	EntryRemoveNode
+)
+
 type LogEntry struct {
-	Term int 
+	Term int
 	Index int //position in log, 1-indexed
 	Command string
+	Type EntryType
+	TargetID int
+	TargetRPC string
 }
 
 //for new raft node, every node starts as a follower state
@@ -262,6 +273,11 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 				rn.log = append(rn.log, entry)
 				fmt.Printf("[Node %d] Appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
 			}
+			if entry.Type == EntryAddNode {
+				rn.addPeer(entry.TargetID, entry.TargetRPC)
+			} else if entry.Type == EntryRemoveNode {
+				rn.removePeer(entry.TargetID)
+			}
 		}
 	}
 
@@ -382,6 +398,48 @@ func (rn *RaftNode) getLogSlice(fromIndex int) []LogEntry {
 		return rn.log
 	}
 	return rn.log[fromIndex-rn.lastIncludedIndex-1:]
+}
+
+func (rn *RaftNode) addPeer(peerID int, rpcAddr string) {
+	if peerID == rn.id {
+		return
+	}
+	rn.peerPorts[peerID] = rpcAddr
+	for _, p := range rn.peers {
+		if p == peerID {
+			return
+		}
+	}
+	rn.peers = append(rn.peers, peerID)
+	if rn.state == Leader {
+		if rn.nextIndex != nil {
+			rn.nextIndex[peerID] = rn.getLastLogIndex() + 1
+		}
+		if rn.matchIndex != nil {
+			rn.matchIndex[peerID] = 0
+		}
+	}
+	fmt.Printf("[Node %d] Added peer %d (%s) to active configuration. Total peers: %v\n", rn.id, peerID, rpcAddr, rn.peers)
+}
+
+func (rn *RaftNode) removePeer(peerID int) {
+	delete(rn.peerPorts, peerID)
+	newPeers := make([]int, 0, len(rn.peers))
+	for _, p := range rn.peers {
+		if p != peerID {
+			newPeers = append(newPeers, p)
+		}
+	}
+	rn.peers = newPeers
+	if rn.state == Leader {
+		if rn.nextIndex != nil {
+			delete(rn.nextIndex, peerID)
+		}
+		if rn.matchIndex != nil {
+			delete(rn.matchIndex, peerID)
+		}
+	}
+	fmt.Printf("[Node %d] Removed peer %d from active configuration. Remaining peers: %v\n", rn.id, peerID, rn.peers)
 }
 
 func (rn *RaftNode) TakeSnapshot(index int) error {
