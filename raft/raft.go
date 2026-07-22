@@ -91,6 +91,7 @@ type RaftNode struct {
 	leaderId        int
 	lastIncludedIndex int
 	lastIncludedTerm  int
+	nonVotingPeers  map[int]string
 }
 
 type EntryType int
@@ -126,6 +127,7 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 		leaderId: -1,
 		lastIncludedIndex: 0,
 		lastIncludedTerm:  0,
+		nonVotingPeers:    make(map[int]string),
 	}
 	node.httpServer = NewHTTPServer(node, httpAddrFromRPC(ports[id]))
 	node.resetElectionTimeout()

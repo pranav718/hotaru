@@ -13,7 +13,11 @@ func (rn *RaftNode) broadcastAppendEntries() {
 	}
 	term := rn.currentTerm
 	myId := rn.id
-	peers := rn.peers
+	peers := make([]int, 0, len(rn.peers)+len(rn.nonVotingPeers))
+	peers = append(peers, rn.peers...)
+	for pid := range rn.nonVotingPeers {
+		peers = append(peers, pid)
+	}
 	rn.mu.Unlock()
 
 	for _, peerId := range peers {
@@ -107,7 +111,27 @@ func (rn *RaftNode) broadcastAppendEntries() {
 			if reply.Success {
 				rn.nextIndex[pid] = next + len(entries)
 				rn.matchIndex[pid] = rn.nextIndex[pid] - 1
-				rn.updateLeaderCommit()
+
+				if rpcAddr, isNonVoting := rn.nonVotingPeers[pid]; isNonVoting {
+					if rn.matchIndex[pid] >= rn.getLastLogIndex() {
+						fmt.Printf("[Node %d] Non-voting peer %d caught up (matchIndex %d). Promoting to voting member.\n", rn.id, pid, rn.matchIndex[pid])
+						delete(rn.nonVotingPeers, pid)
+
+						entry := LogEntry{
+							Term:      rn.currentTerm,
+							Index:     rn.getLastLogIndex() + 1,
+							Command:   fmt.Sprintf("ADD_NODE %d %s", pid, rpcAddr),
+							Type:      EntryAddNode,
+							TargetID:  pid,
+							TargetRPC: rpcAddr,
+						}
+						rn.log = append(rn.log, entry)
+						rn.addPeer(pid, rpcAddr)
+						rn.persist()
+					}
+				} else {
+					rn.updateLeaderCommit()
+				}
 			} else {
 				rn.nextIndex[pid] = rn.nextIndex[pid] - 1
 				if rn.nextIndex[pid] < 1 {
@@ -282,24 +306,29 @@ func (rn *RaftNode) ProposeAddNode(peerID int, rpcAddr string) (int, bool) {
 		return 0, false
 	}
 
+	for _, p := range rn.peers {
+		if p == peerID {
+			return 0, false
+		}
+	}
+
 	if rn.hasUncommittedConfigChange() {
 		fmt.Printf("[Node %d] Cannot propose AddNode %d: another configuration change is uncommitted\n", rn.id, peerID)
 		return 0, false
 	}
 
-	entry := LogEntry{
-		Term:      rn.currentTerm,
-		Index:     rn.getLastLogIndex() + 1,
-		Command:   fmt.Sprintf("ADD_NODE %d %s", peerID, rpcAddr),
-		Type:      EntryAddNode,
-		TargetID:  peerID,
-		TargetRPC: rpcAddr,
+	rn.peerPorts[peerID] = rpcAddr
+	rn.nonVotingPeers[peerID] = rpcAddr
+	if rn.nextIndex != nil {
+		rn.nextIndex[peerID] = rn.getLastLogIndex() + 1
 	}
-	rn.log = append(rn.log, entry)
-	rn.addPeer(peerID, rpcAddr)
-	rn.persist()
-	fmt.Printf("[Node %d] Leader appended AddNode entry locally: Index %d, Peer %d (%s)\n", rn.id, entry.Index, peerID, rpcAddr)
-	return entry.Index, true
+	if rn.matchIndex != nil {
+		rn.matchIndex[peerID] = 0
+	}
+
+	fmt.Printf("[Node %d] Staged peer %d (%s) as non-voting member for catchup phase\n", rn.id, peerID, rpcAddr)
+	go rn.broadcastAppendEntries()
+	return rn.getLastLogIndex(), true
 }
 
 func (rn *RaftNode) ProposeRemoveNode(peerID int) (int, bool) {
