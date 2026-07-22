@@ -442,6 +442,16 @@ func (rn *RaftNode) removePeer(peerID int) {
 	fmt.Printf("[Node %d] Removed peer %d from active configuration. Remaining peers: %v\n", rn.id, peerID, rn.peers)
 }
 
+func (rn *RaftNode) hasUncommittedConfigChange() bool {
+	for i := rn.commitIndex + 1; i <= rn.getLastLogIndex(); i++ {
+		entry := rn.getLogEntry(i)
+		if entry.Type == EntryAddNode || entry.Type == EntryRemoveNode {
+			return true
+		}
+	}
+	return false
+}
+
 func (rn *RaftNode) TakeSnapshot(index int) error {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()

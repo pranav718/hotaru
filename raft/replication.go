@@ -194,6 +194,11 @@ func (rn *RaftNode) applyLogs() {
 		entry := rn.getLogEntry(rn.lastApplied)
 		result := rn.kvStore.Apply(entry.Command)
 		fmt.Printf("[Node %d] Applied entry locally: Index %d, Term %d, Command '%s' -> Result: '%s'\n", rn.id, entry.Index, entry.Term, entry.Command, result)
+
+		if entry.Type == EntryRemoveNode && entry.TargetID == rn.id && rn.state == Leader {
+			fmt.Printf("[Node %d] Leader committed self-removal entry. Stepping down to Follower.\n", rn.id)
+			rn.becomeFollower(rn.currentTerm)
+		}
 	}
 }
 
@@ -277,6 +282,11 @@ func (rn *RaftNode) ProposeAddNode(peerID int, rpcAddr string) (int, bool) {
 		return 0, false
 	}
 
+	if rn.hasUncommittedConfigChange() {
+		fmt.Printf("[Node %d] Cannot propose AddNode %d: another configuration change is uncommitted\n", rn.id, peerID)
+		return 0, false
+	}
+
 	entry := LogEntry{
 		Term:      rn.currentTerm,
 		Index:     rn.getLastLogIndex() + 1,
@@ -297,6 +307,11 @@ func (rn *RaftNode) ProposeRemoveNode(peerID int) (int, bool) {
 	defer rn.mu.Unlock()
 
 	if rn.state != Leader {
+		return 0, false
+	}
+
+	if rn.hasUncommittedConfigChange() {
+		fmt.Printf("[Node %d] Cannot propose RemoveNode %d: another configuration change is uncommitted\n", rn.id, peerID)
 		return 0, false
 	}
 
