@@ -34,6 +34,8 @@ func (h *HTTPServer) Start() error {
 	mux.HandleFunc("/set", h.handleSet)
 	mux.HandleFunc("/get", h.handleGet)
 	mux.HandleFunc("/del", h.handleDel)
+	mux.HandleFunc("/join", h.handleJoin)
+	mux.HandleFunc("/leave", h.handleLeave)
 
 	h.server = &http.Server{
 		Handler: mux,
@@ -160,6 +162,59 @@ func (h *HTTPServer) handleDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte(res))
+}
+
+func (h *HTTPServer) handleJoin(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	addr := r.URL.Query().Get("addr")
+	if idStr == "" || addr == "" {
+		http.Error(w, "missing id or addr parameter", http.StatusBadRequest)
+		return
+	}
+	var id int
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		http.Error(w, "invalid id parameter", http.StatusBadRequest)
+		return
+	}
+
+	state, _ := h.node.GetState()
+	if state != Leader {
+		h.proxyToLeader(w, r)
+		return
+	}
+
+	_, ok := h.node.ProposeAddNode(id, addr)
+	if !ok {
+		http.Error(w, "failed to propose add node", http.StatusServiceUnavailable)
+		return
+	}
+	w.Write([]byte("OK"))
+}
+
+func (h *HTTPServer) handleLeave(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "missing id parameter", http.StatusBadRequest)
+		return
+	}
+	var id int
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		http.Error(w, "invalid id parameter", http.StatusBadRequest)
+		return
+	}
+
+	state, _ := h.node.GetState()
+	if state != Leader {
+		h.proxyToLeader(w, r)
+		return
+	}
+
+	_, ok := h.node.ProposeRemoveNode(id)
+	if !ok {
+		http.Error(w, "failed to propose remove node", http.StatusServiceUnavailable)
+		return
+	}
+	w.Write([]byte("OK"))
 }
 
 func httpAddrFromRPC(rpcAddr string) string {
