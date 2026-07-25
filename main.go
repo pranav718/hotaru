@@ -60,6 +60,26 @@ func httpDel(port int, key string) error {
 	return nil
 }
 
+func httpJoin(port int, id int, addr string) error {
+	url := fmt.Sprintf("http://127.0.0.1:%d/join?id=%d&addr=%s", port, id, addr)
+	res, err := httpDo("POST", url)
+	if err != nil {
+		return fmt.Errorf("JOIN node %d on port %d: %v", id, port, err)
+	}
+	fmt.Printf("[HTTP] JOIN node %d (%s) on :%d → %s\n", id, addr, port, res)
+	return nil
+}
+
+func httpLeave(port int, id int) error {
+	url := fmt.Sprintf("http://127.0.0.1:%d/leave?id=%d", port, id)
+	res, err := httpDo("POST", url)
+	if err != nil {
+		return fmt.Errorf("LEAVE node %d on port %d: %v", id, port, err)
+	}
+	fmt.Printf("[HTTP] LEAVE node %d on :%d → %s\n", id, port, res)
+	return nil
+}
+
 func main() {
 	ports := map[int]string{
 		0: "127.0.0.1:8000",
@@ -67,7 +87,7 @@ func main() {
 		2: "127.0.0.1:8002",
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		os.Remove(fmt.Sprintf("raft_state_%d.json", i))
 		os.Remove(fmt.Sprintf("raft_snapshot_%d.bin", i))
 	}
@@ -288,6 +308,49 @@ func main() {
 			fmt.Printf("[Test] Node 2: key %q = %q\n", key, val)
 		}
 	}
+
+	fmt.Println("\n=== Test 7: Dynamic Cluster Membership Changes (/join & /leave) ===")
+	// Step 1: Start Node 3 server
+	ports[3] = "127.0.0.1:8003"
+	node3 := raft.NewRaftNode(3, []int{0, 1, 2}, ports)
+	if err := node3.StartServer(); err != nil {
+		fmt.Printf("error starting server 3: %v\n", err)
+		return
+	}
+	defer node3.StopServer()
+	time.Sleep(300 * time.Millisecond)
+
+	// Step 2: Dynamically join Node 3 to cluster via HTTP
+	fmt.Println("[Test] Proposing JOIN for Node 3 via HTTP...")
+	if err := httpJoin(httpPortFor(0), 3, "127.0.0.1:8003"); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	time.Sleep(1 * time.Second)
+
+	// Step 3: Write key to cluster and read from Node 3
+	fmt.Println("[Test] Writing 'membership_key=active' to leader...")
+	if err := httpSet(httpPortFor(newLeader.GetId()), "membership_key", "active"); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	time.Sleep(400 * time.Millisecond)
+
+	fmt.Println("[Test] Reading 'membership_key' directly from newly joined Node 3...")
+	val, err = httpGet(httpPortFor(3), "membership_key")
+	if err != nil {
+		fmt.Printf("FAIL: reading from Node 3: %v\n", err)
+	} else {
+		fmt.Printf("[Test] Node 3 read result: membership_key = %q\n", val)
+	}
+
+	// Step 4: Dynamically remove Node 3 via HTTP
+	fmt.Println("[Test] Proposing LEAVE for Node 3 via HTTP...")
+	if err := httpLeave(httpPortFor(0), 3); err != nil {
+		fmt.Printf("FAIL: %v\n", err)
+		return
+	}
+	time.Sleep(500 * time.Millisecond)
 
 	fmt.Println("\n=== All HTTP integration tests complete ===")
 }
