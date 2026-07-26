@@ -352,5 +352,20 @@ func main() {
 	}
 	time.Sleep(500 * time.Millisecond)
 
+	fmt.Println("\n=== Test 8: High-Throughput & Eager Replication Benchmark ===")
+	startBench := time.Now()
+	numReqs := 20
+	fmt.Printf("[Test] Firing %d rapid HTTP SET proposals to leader...\n", numReqs)
+	for i := 0; i < numReqs; i++ {
+		key := fmt.Sprintf("bench_%d", i)
+		val := fmt.Sprintf("val_%d", i)
+		if err := httpSet(httpPortFor(newLeader.GetId()), key, val); err != nil {
+			fmt.Printf("FAIL: benchmark write %d: %v\n", i, err)
+			return
+		}
+	}
+	elapsed := time.Since(startBench)
+	fmt.Printf("[Benchmark Result] Completed %d proposals in %v (avg %.2f ms per proposal)\n", numReqs, elapsed, float64(elapsed.Milliseconds())/float64(numReqs))
+
 	fmt.Println("\n=== All HTTP integration tests complete ===")
 }
