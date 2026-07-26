@@ -133,7 +133,22 @@ func (rn *RaftNode) broadcastAppendEntries() {
 					rn.updateLeaderCommit()
 				}
 			} else {
-				rn.nextIndex[pid] = rn.nextIndex[pid] - 1
+				if reply.ConflictTerm != -1 {
+					conflictIndex := -1
+					for i := rn.getLastLogIndex(); i > rn.lastIncludedIndex; i-- {
+						if rn.getLogTerm(i) == reply.ConflictTerm {
+							conflictIndex = i
+							break
+						}
+					}
+					if conflictIndex != -1 {
+						rn.nextIndex[pid] = conflictIndex + 1
+					} else {
+						rn.nextIndex[pid] = reply.ConflictIndex
+					}
+				} else {
+					rn.nextIndex[pid] = reply.ConflictIndex
+				}
 				if rn.nextIndex[pid] < 1 {
 					rn.nextIndex[pid] = 1
 				}
@@ -158,9 +173,8 @@ func (rn *RaftNode) runHeartbeatLoop() {
 
 func (rn *RaftNode) Propose(command string) (int, bool) {
 	rn.mu.Lock()
-	defer rn.mu.Unlock()
-
 	if rn.state != Leader {
+		rn.mu.Unlock()
 		return 0, false
 	}
 
@@ -172,6 +186,9 @@ func (rn *RaftNode) Propose(command string) (int, bool) {
 	rn.log = append(rn.log, entry)
 	rn.persist()
 	fmt.Printf("[Node %d] Leader appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
+	rn.mu.Unlock()
+
+	go rn.broadcastAppendEntries()
 	return entry.Index, true
 }
 
@@ -333,14 +350,15 @@ func (rn *RaftNode) ProposeAddNode(peerID int, rpcAddr string) (int, bool) {
 
 func (rn *RaftNode) ProposeRemoveNode(peerID int) (int, bool) {
 	rn.mu.Lock()
-	defer rn.mu.Unlock()
 
 	if rn.state != Leader {
+		rn.mu.Unlock()
 		return 0, false
 	}
 
 	if rn.hasUncommittedConfigChange() {
 		fmt.Printf("[Node %d] Cannot propose RemoveNode %d: another configuration change is uncommitted\n", rn.id, peerID)
+		rn.mu.Unlock()
 		return 0, false
 	}
 
@@ -355,5 +373,8 @@ func (rn *RaftNode) ProposeRemoveNode(peerID int) (int, bool) {
 	rn.removePeer(peerID)
 	rn.persist()
 	fmt.Printf("[Node %d] Leader appended RemoveNode entry locally: Index %d, Peer %d\n", rn.id, entry.Index, peerID)
+	rn.mu.Unlock()
+
+	go rn.broadcastAppendEntries()
 	return entry.Index, true
 }

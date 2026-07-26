@@ -55,6 +55,8 @@ type AppendEntriesArgs struct {
 type AppendEntriesReply struct {
 	Term    int
 	Success bool
+	ConflictIndex int
+	ConflictTerm  int
 }
 
 type InstallSnapshotArgs struct {
@@ -193,6 +195,20 @@ func (rn *RaftNode) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) 
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
 
+	// 0. inore vote requests from nodes not in our active cluster configuration
+	isPeer := (args.CandidateId == rn.id)
+	for _, p := range rn.peers {
+		if p == args.CandidateId {
+			isPeer = true
+			break
+		}
+	}
+	if !isPeer {
+		reply.Term = rn.currentTerm
+		reply.VoteGranted = false
+		return nil
+	}
+
 	// 1. Term check: Candidate term must be >= ours
 	if args.Term < rn.currentTerm {
 		reply.Term = rn.currentTerm
@@ -251,11 +267,19 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 		if rn.getLastLogIndex() < args.PrevLogIndex {
 			reply.Term = rn.currentTerm
 			reply.Success = false
+			reply.ConflictIndex = rn.getLastLogIndex() + 1
+			reply.ConflictTerm = -1
 			return nil
 		}
 		if rn.getLogTerm(args.PrevLogIndex) != args.PrevLogTerm {
 			reply.Term = rn.currentTerm
 			reply.Success = false
+			reply.ConflictTerm = rn.getLogTerm(args.PrevLogIndex)
+			firstIndex := args.PrevLogIndex
+			for firstIndex > rn.lastIncludedIndex+1 && rn.getLogTerm(firstIndex-1) == reply.ConflictTerm {
+				firstIndex--
+			}
+			reply.ConflictIndex = firstIndex
 			return nil
 		}
 	}
