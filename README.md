@@ -33,17 +33,7 @@ a lightweight distributed consensus engine and replicated key-value database bui
 
 ## architecture
 
-```mermaid
-flowchart TD
-    Client[HTTP Client] -->|POST /set, /get, /join| Leader[Raft Leader Node]
-    Follower1[Raft Follower 1] <-->|AppendEntries / InstallSnapshot| Leader
-    Follower2[Raft Follower 2] <-->|AppendEntries / InstallSnapshot| Leader
-    
-    Leader -->|Apply Committed Logs| KVStore[KVStore State Machine]
-    Leader -->|TakeSnapshot| Snapshot[Snapshot Disk Persistence]
-    
-    Follower1 -->|Proxy Writes| Leader
-```
+![architecture](architecture.png)
 
 ---
 
