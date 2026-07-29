@@ -3,6 +3,7 @@ package raft
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -31,11 +32,13 @@ func (h *HTTPServer) Start() error {
 	defer h.mu.Unlock()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/set", h.handleSet)
-	mux.HandleFunc("/get", h.handleGet)
-	mux.HandleFunc("/del", h.handleDel)
-	mux.HandleFunc("/join", h.handleJoin)
-	mux.HandleFunc("/leave", h.handleLeave)
+	mux.HandleFunc("/set", enableCORS(h.handleSet))
+	mux.HandleFunc("/get", enableCORS(h.handleGet))
+	mux.HandleFunc("/del", enableCORS(h.handleDel))
+	mux.HandleFunc("/join", enableCORS(h.handleJoin))
+	mux.HandleFunc("/leave", enableCORS(h.handleLeave))
+	mux.HandleFunc("/status", enableCORS(h.handleStatus))
+	mux.HandleFunc("/events", enableCORS(h.handleEvents))
 
 	h.server = &http.Server{
 		Handler: mux,
@@ -215,6 +218,57 @@ func (h *HTTPServer) handleLeave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte("OK"))
+}
+
+func (h *HTTPServer) handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	status := h.node.GetClusterStatus()
+	json.NewEncoder(w).Encode(status)
+}
+
+func (h *HTTPServer) handleEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	eventBus := h.node.GetEventBus()
+	ctx := r.Context()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-eventBus:
+			if !ok {
+				return
+			}
+			data, err := json.Marshal(event)
+			if err != nil {
+				continue
+			}
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+	}
+}
+
+func enableCORS(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next(w, r)
+	}
 }
 
 func httpAddrFromRPC(rpcAddr string) string {
