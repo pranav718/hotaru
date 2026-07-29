@@ -254,9 +254,18 @@ func (rn *RaftNode) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) 
 		rn.persist()
 		reply.VoteGranted = true
 		fmt.Printf("[Node %d] Granted vote to Candidate %d in Term %d\n", rn.id, args.CandidateId, rn.currentTerm)
+		rn.emitEvent("vote_granted", map[string]interface{}{
+			"candidate_id": args.CandidateId,
+			"voter_id":     rn.id,
+		})
 	} else {
 		reply.VoteGranted = false
 		fmt.Printf("[Node %d] Denied vote to Candidate %d in Term %d (already voted for %d)\n", rn.id, args.CandidateId, rn.currentTerm, rn.votedFor)
+		rn.emitEvent("vote_denied", map[string]interface{}{
+			"candidate_id": args.CandidateId,
+			"voter_id":     rn.id,
+			"voted_for":    rn.votedFor,
+		})
 	}
 
 	reply.Term = rn.currentTerm

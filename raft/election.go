@@ -47,6 +47,10 @@ func (rn *RaftNode) startElection() {
 	peers := rn.peers
 	lastLogIndex := rn.getLastLogIndex()
 	lastLogTerm := rn.getLastLogTerm()
+	rn.emitEvent("election_started", map[string]interface{}{
+		"candidate_id": myId,
+		"peer_count":   len(peers),
+	})
 	rn.mu.Unlock()
 
 	votesGranted := 1 //self vote
