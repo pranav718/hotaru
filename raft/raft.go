@@ -170,6 +170,11 @@ func (rn *RaftNode) becomeFollower(term int) {
 	rn.lastContact = time.Now()
 	rn.persist()
 	fmt.Printf("[Node %d] %s (term %d) → Follower (term %d)\n", rn.id, oldState, oldTerm, term)
+	rn.emitEvent("state_change", map[string]interface{}{
+		"old_state": oldState.String(),
+		"new_state": "Follower",
+		"old_term":  oldTerm,
+	})
 }
 
 func (rn *RaftNode) becomeCandidate() {
@@ -179,6 +184,10 @@ func (rn *RaftNode) becomeCandidate() {
 	rn.leaderId = -1
 	rn.persist()
 	fmt.Printf("[Node %d] → Candidate (term %d)\n", rn.id, rn.currentTerm)
+	rn.emitEvent("state_change", map[string]interface{}{
+		"old_state": "Follower",
+		"new_state": "Candidate",
+	})
 }
 
 func (rn *RaftNode) becomeLeader() {
@@ -191,6 +200,10 @@ func (rn *RaftNode) becomeLeader() {
 		rn.matchIndex[peerId] = 0
 	}
 	fmt.Printf("[Node %d] → Leader (term %d)\n", rn.id, rn.currentTerm)
+	rn.emitEvent("state_change", map[string]interface{}{
+		"old_state": "Candidate",
+		"new_state": "Leader",
+	})
 	go rn.runHeartbeatLoop()
 }
 
