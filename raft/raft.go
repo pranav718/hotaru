@@ -94,6 +94,8 @@ type RaftNode struct {
 	lastIncludedIndex int
 	lastIncludedTerm  int
 	nonVotingPeers  map[int]string
+	eventBus        chan RaftEvent
+	eventMu         sync.RWMutex
 }
 
 type EntryType int
@@ -130,6 +132,7 @@ func NewRaftNode(id int, peers []int, ports map[int]string) *RaftNode {
 		lastIncludedIndex: 0,
 		lastIncludedTerm:  0,
 		nonVotingPeers:    make(map[int]string),
+		eventBus:          make(chan RaftEvent, 256),
 	}
 	node.httpServer = NewHTTPServer(node, httpAddrFromRPC(ports[id]))
 	node.resetElectionTimeout()
