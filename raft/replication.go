@@ -166,6 +166,10 @@ func (rn *RaftNode) runHeartbeatLoop() {
 			rn.mu.Unlock()
 			return
 		}
+		rn.emitEvent("heartbeat", map[string]interface{}{
+			"leader_id":    rn.id,
+			"commit_index": rn.commitIndex,
+		})
 		rn.mu.Unlock()
 		rn.broadcastAppendEntries()
 	}
@@ -186,6 +190,10 @@ func (rn *RaftNode) Propose(command string) (int, bool) {
 	rn.log = append(rn.log, entry)
 	rn.persist()
 	fmt.Printf("[Node %d] Leader appended entry locally: Index %d, Term %d, Command '%s'\n", rn.id, entry.Index, entry.Term, entry.Command)
+	rn.emitEvent("log_append", map[string]interface{}{
+		"index":   entry.Index,
+		"command": entry.Command,
+	})
 	rn.mu.Unlock()
 
 	go rn.broadcastAppendEntries()
@@ -257,8 +265,13 @@ func (rn *RaftNode) updateLeaderCommit() {
 		}
 
 		if count > (len(rn.peers)+1)/2 {
+			oldCommit := rn.commitIndex
 			rn.commitIndex = n
 			rn.applyLogs()
+			rn.emitEvent("log_commit", map[string]interface{}{
+				"old_commit_index": oldCommit,
+				"new_commit_index": n,
+			})
 			break
 		}
 	}
