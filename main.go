@@ -98,12 +98,23 @@ func main() {
 
 	nodes := []*raft.RaftNode{node0, node1, node2}
 
-	for i, node := range nodes {
-		if err := node.StartServer(); err != nil {
-			fmt.Printf("error starting server %d: %v\n", i, err)
+	for _, n := range nodes {
+		if err := n.StartServer(); err != nil {
+			fmt.Printf("error starting server %d: %v\n", n.GetId(), err)
 			return
 		}
-		defer node.StopServer()
+		defer n.StopServer()
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "--dashboard" {
+		fmt.Println("=====================================================")
+		fmt.Println(" Hotaru Raft Cluster running in Dashboard Mode")
+		fmt.Println(" Nodes: 0 (:8010), 1 (:8011), 2 (:8012)")
+		fmt.Println(" SSE Event Streams: http://127.0.0.1:801x/events")
+		fmt.Println(" Status Endpoints:   http://127.0.0.1:801x/status")
+		fmt.Println(" Press Ctrl+C to stop.")
+		fmt.Println("=====================================================")
+		select {}
 	}
 
 	time.Sleep(600 * time.Millisecond)
