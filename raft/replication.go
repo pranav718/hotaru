@@ -128,6 +128,10 @@ func (rn *RaftNode) broadcastAppendEntries() {
 						rn.log = append(rn.log, entry)
 						rn.addPeer(pid, rpcAddr)
 						rn.persist()
+						rn.emitEvent("peer_added", map[string]interface{}{
+							"peer_id":  pid,
+							"rpc_addr": rpcAddr,
+						})
 					}
 				} else {
 					rn.updateLeaderCommit()
@@ -357,6 +361,10 @@ func (rn *RaftNode) ProposeAddNode(peerID int, rpcAddr string) (int, bool) {
 	}
 
 	fmt.Printf("[Node %d] Staged peer %d (%s) as non-voting member for catchup phase\n", rn.id, peerID, rpcAddr)
+	rn.emitEvent("peer_staged", map[string]interface{}{
+		"peer_id":  peerID,
+		"rpc_addr": rpcAddr,
+	})
 	go rn.broadcastAppendEntries()
 	return rn.getLastLogIndex(), true
 }
@@ -386,6 +394,9 @@ func (rn *RaftNode) ProposeRemoveNode(peerID int) (int, bool) {
 	rn.removePeer(peerID)
 	rn.persist()
 	fmt.Printf("[Node %d] Leader appended RemoveNode entry locally: Index %d, Peer %d\n", rn.id, entry.Index, peerID)
+	rn.emitEvent("peer_removed", map[string]interface{}{
+		"peer_id": peerID,
+	})
 	rn.mu.Unlock()
 
 	go rn.broadcastAppendEntries()

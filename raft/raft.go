@@ -397,6 +397,11 @@ func (rn *RaftNode) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSna
 	rn.persist()
 	rn.lastContact = time.Now()
 	reply.Term = rn.currentTerm
+	rn.emitEvent("snapshot_installed", map[string]interface{}{
+		"leader_id":           args.LeaderId,
+		"last_included_index": args.LastIncludedIndex,
+		"last_included_term":  args.LastIncludedTerm,
+	})
 	return nil
 }
 
