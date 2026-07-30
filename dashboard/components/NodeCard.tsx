@@ -15,8 +15,10 @@ export function NodeCard({ node }: NodeCardProps) {
   const isOffline = node.state === "Offline";
 
   const roleStyles = {
-    Leader: "border-emerald-500/40 bg-emerald-950/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]",
-    Candidate: "border-amber-500/40 bg-amber-950/20 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.1)] animate-pulse",
+    Leader:
+      "border-emerald-500/40 bg-emerald-950/20 text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.15)]",
+    Candidate:
+      "border-amber-500/40 bg-amber-950/20 text-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.15)] animate-pulse",
     Follower: "border-zinc-800 bg-zinc-900/60 text-zinc-300",
     Offline: "border-red-900/40 bg-red-950/20 text-red-400 opacity-60",
   };
@@ -31,11 +33,12 @@ export function NodeCard({ node }: NodeCardProps) {
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      whileHover={{ y: -3, transition: { duration: 0.2 } }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className={cn(
-        "relative rounded-xl border p-5 transition-all duration-300 backdrop-blur-md",
+        "relative rounded-xl border p-5 transition-colors duration-300 backdrop-blur-md",
         roleStyles[node.state] || roleStyles.Follower
       )}
     >
@@ -54,7 +57,12 @@ export function NodeCard({ node }: NodeCardProps) {
           </div>
         </div>
 
-        <div
+        <motion.div
+          layout
+          key={node.state}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 400, damping: 20 }}
           className={cn(
             "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium border",
             badgeStyles[node.state]
@@ -67,7 +75,7 @@ export function NodeCard({ node }: NodeCardProps) {
           )}
           {isOffline && <AlertCircle className="h-3.5 w-3.5" />}
           <span>{node.state.toLowerCase()}</span>
-        </div>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-zinc-800/60 font-mono text-xs">
