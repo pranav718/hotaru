@@ -6,8 +6,9 @@ import { ClusterTopology } from "@/components/ClusterTopology";
 import { LogBar } from "@/components/LogBar";
 import { EventFeed } from "@/components/EventFeed";
 import { ControlPanel } from "@/components/ControlPanel";
+import { FireflyMark } from "@/components/FireflyMark";
 import { DisplayLogEntry } from "@/types/raft";
-import { Flame, ExternalLink, GitBranch, Wifi, WifiOff } from "lucide-react";
+import { ExternalLink, GitBranch, Wifi, WifiOff } from "lucide-react";
 
 const SSE_ENDPOINTS = [
   "http://127.0.0.1:8010/events",
@@ -43,14 +44,18 @@ export default function DashboardPage() {
 
   return (
     <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8 space-y-8">
-      <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 text-amber-400">
-            <Flame className="h-5 w-5" />
-          </div>
+      {/* Top Header with Firefly Logo & Italic Serif Wordmark */}
+      <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
+        <div className="flex items-center gap-3.5">
+          <FireflyMark className="w-8 h-8" />
           <div>
-            <h1 className="font-mono text-lg font-bold tracking-tight text-zinc-100 flex items-center gap-2">
-              hotaru <span className="text-zinc-600 text-xs font-normal">v1.0</span>
+            <h1 className="flex items-baseline gap-2">
+              <span className="font-serif italic font-normal text-3xl tracking-normal text-[#C9F27D]">
+                hotaru
+              </span>
+              <span className="font-mono text-xs text-zinc-500 font-medium">
+                v1.0
+              </span>
             </h1>
             <p className="text-xs font-mono text-zinc-400">
               distributed raft consensus & key-value engine visualizer
@@ -62,13 +67,17 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/80">
             {hasActiveCluster ? (
               <>
-                <Wifi className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
-                <span className="text-emerald-400 font-medium">cluster online</span>
+                <Wifi className="h-3.5 w-3.5 text-[#C9F27D] animate-pulse" />
+                <span className="text-[#C9F27D] font-medium">
+                  cluster online
+                </span>
               </>
             ) : (
               <>
                 <WifiOff className="h-3.5 w-3.5 text-zinc-500" />
-                <span className="text-zinc-500">disconnected (run main --dashboard)</span>
+                <span className="text-zinc-500">
+                  disconnected (run main --dashboard)
+                </span>
               </>
             )}
           </div>
@@ -89,16 +98,18 @@ export default function DashboardPage() {
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors"
           >
-            <GitBranch className="h-3.5 w-3.5 text-amber-400" />
+            <GitBranch className="h-3.5 w-3.5 text-[#C9F27D]" />
             <span>github</span>
           </a>
         </div>
       </header>
 
+      {/* Cluster Topology Panel */}
       <section>
         <ClusterTopology nodes={nodes} />
       </section>
 
+      {/* Log Propagation Visualizer */}
       <section className="space-y-3">
         <h2 className="font-mono text-sm font-semibold tracking-wide text-zinc-200 uppercase">
           log propagation & commit state
@@ -115,11 +126,13 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* Timeline & Interactive Console */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <EventFeed events={events} />
         <ControlPanel />
       </section>
 
+      {/* Footer */}
       <footer className="pt-8 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-zinc-400 gap-2">
         <div>hotaru raft engine &copy; 2026. built from scratch in go.</div>
         <div>
@@ -128,7 +141,7 @@ export default function DashboardPage() {
             href="https://medium.com/@knightkun/raft-consensus-explained-simply-then-built-in-go-f642531b6527?sharedUserId=knightkun"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-amber-400 hover:underline"
+            className="text-[#C9F27D] hover:underline"
           >
             medium
           </a>

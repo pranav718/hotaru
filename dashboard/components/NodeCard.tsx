@@ -16,7 +16,7 @@ export function NodeCard({ node }: NodeCardProps) {
 
   const roleStyles = {
     Leader:
-      "border-emerald-500/40 bg-emerald-950/20 text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.15)]",
+      "border-[#C9F27D]/40 bg-[#C9F27D]/5 text-[#C9F27D] shadow-[0_0_25px_rgba(201,242,125,0.12)]",
     Candidate:
       "border-amber-500/40 bg-amber-950/20 text-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.15)] animate-pulse",
     Follower: "border-zinc-800 bg-zinc-900/60 text-zinc-300",
@@ -24,7 +24,7 @@ export function NodeCard({ node }: NodeCardProps) {
   };
 
   const badgeStyles = {
-    Leader: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+    Leader: "bg-[#C9F27D]/10 text-[#C9F27D] border-[#C9F27D]/30",
     Candidate: "bg-amber-500/10 text-amber-400 border-amber-500/30",
     Follower: "bg-zinc-800 text-zinc-400 border-zinc-700",
     Offline: "bg-red-500/10 text-red-400 border-red-500/30",
@@ -38,10 +38,14 @@ export function NodeCard({ node }: NodeCardProps) {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className={cn(
-        "relative rounded-xl border p-5 transition-colors duration-300 backdrop-blur-md",
+        "relative rounded-xl border p-5 transition-colors duration-300 backdrop-blur-md overflow-hidden",
         roleStyles[node.state] || roleStyles.Follower
       )}
     >
+      {isLeader && (
+        <div className="absolute inset-0 rounded-xl border border-[#C9F27D]/30 animate-heartbeat-ring pointer-events-none" />
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/80 border border-zinc-700/50">
@@ -68,8 +72,8 @@ export function NodeCard({ node }: NodeCardProps) {
             badgeStyles[node.state]
           )}
         >
-          {isLeader && <Crown className="h-3.5 w-3.5" />}
-          {isCandidate && <Zap className="h-3.5 w-3.5" />}
+          {isLeader && <Crown className="h-3.5 w-3.5 text-[#C9F27D]" />}
+          {isCandidate && <Zap className="h-3.5 w-3.5 text-amber-400" />}
           {!isLeader && !isCandidate && !isOffline && (
             <Shield className="h-3.5 w-3.5" />
           )}

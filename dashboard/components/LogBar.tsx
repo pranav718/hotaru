@@ -12,22 +12,28 @@ interface LogBarProps {
 
 export function LogBar({ nodeId, commitIndex, entries }: LogBarProps) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3 backdrop-blur-md">
-      <div className="flex items-center justify-between font-mono text-xs">
+    <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3 backdrop-blur-md overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.25)_51%)] bg-[length:100%_4px] pointer-events-none opacity-30" />
+
+      <div className="relative z-10 flex items-center justify-between font-mono text-xs">
         <div className="flex items-center gap-2">
-          <GitCommitHorizontal className="h-4 w-4 text-emerald-400" />
+          <GitCommitHorizontal className="h-4 w-4 text-[#C9F27D]" />
           <span className="font-semibold text-zinc-200">node-{nodeId} log</span>
         </div>
         <div className="flex items-center gap-3 text-zinc-400 text-[11px]">
-          <span>commit index: <strong className="text-emerald-400">{commitIndex}</strong></span>
-          <span>total entries: <strong className="text-zinc-200">{entries.length}</strong></span>
+          <span>
+            commit index: <strong className="text-[#C9F27D]">{commitIndex}</strong>
+          </span>
+          <span>
+            total entries: <strong className="text-zinc-200">{entries.length}</strong>
+          </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin">
+      <div className="relative z-10 flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin">
         {entries.length === 0 ? (
           <div className="py-3 px-4 font-mono text-xs text-zinc-600 italic">
-            no entries in log
+            log is dark
           </div>
         ) : (
           entries.map((entry) => (

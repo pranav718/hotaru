@@ -18,15 +18,15 @@ export function ClusterTopology({ nodes }: ClusterTopologyProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-emerald-400" />
+          <Activity className="h-4 w-4 text-[#C9F27D]" />
           <h2 className="font-mono text-sm font-semibold tracking-wide text-zinc-200 uppercase">
             cluster topology & quorum
           </h2>
         </div>
         <div className="flex items-center gap-3 font-mono text-xs text-zinc-500">
           {leaderNode && (
-            <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
-              <Radio className="h-3 w-3 animate-pulse" />
+            <div className="flex items-center gap-1.5 text-[#C9F27D] bg-[#C9F27D]/10 border border-[#C9F27D]/20 px-2.5 py-0.5 rounded-full">
+              <Radio className="h-3 w-3 animate-pulse text-[#C9F27D]" />
               <span>heartbeat active ({followerCount} peers)</span>
             </div>
           )}
@@ -43,9 +43,9 @@ export function ClusterTopology({ nodes }: ClusterTopologyProps) {
       <div className="relative">
         {leaderNode && (
           <motion.div
-            animate={{ opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-amber-500/5 to-cyan-500/10 blur-xl pointer-events-none"
+            animate={{ opacity: [0.2, 0.5, 0.2] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#C9F27D]/15 via-amber-500/5 to-cyan-500/10 blur-xl pointer-events-none"
           />
         )}
 
