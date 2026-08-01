@@ -309,9 +309,7 @@ func (rn *RaftNode) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesR
 		}
 	}
 
-	if len(args.Entries) == 0 {
-		fmt.Printf("[Node %d] Received Heartbeat (AppendEntries) from Leader %d in Term %d\n", rn.id, args.LeaderId, args.Term)
-	} else {
+	if len(args.Entries) > 0 {
 		fmt.Printf("[Node %d] Received Replication (AppendEntries) from Leader %d with %d entries in Term %d\n", rn.id, args.LeaderId, len(args.Entries), args.Term)
 		for _, entry := range args.Entries {
 			if entry.Index <= rn.getLastLogIndex() {

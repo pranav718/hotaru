@@ -164,16 +164,12 @@ func (rn *RaftNode) broadcastAppendEntries() {
 func (rn *RaftNode) runHeartbeatLoop() {
 	rn.broadcastAppendEntries()
 	for {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		rn.mu.Lock()
 		if rn.killed || rn.state != Leader {
 			rn.mu.Unlock()
 			return
 		}
-		rn.emitEvent("heartbeat", map[string]interface{}{
-			"leader_id":    rn.id,
-			"commit_index": rn.commitIndex,
-		})
 		rn.mu.Unlock()
 		rn.broadcastAppendEntries()
 	}
