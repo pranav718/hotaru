@@ -38,6 +38,9 @@ export default function DashboardPage() {
     });
   };
 
+  const hasActiveCluster =
+    isConnected || Object.values(nodes).some((n) => n.state !== "Offline");
+
   return (
     <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8 space-y-8">
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
@@ -57,10 +60,10 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-4 text-xs font-mono">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/80">
-            {isConnected ? (
+            {hasActiveCluster ? (
               <>
                 <Wifi className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
-                <span className="text-emerald-400 font-medium">sse connected</span>
+                <span className="text-emerald-400 font-medium">cluster online</span>
               </>
             ) : (
               <>

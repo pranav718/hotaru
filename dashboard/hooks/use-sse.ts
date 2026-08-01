@@ -7,19 +7,20 @@ export function useSSE(endpoints: string[]) {
   const [events, setEvents] = useState<RaftEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const sourcesRef = useRef<EventSource[]>([]);
+  const endpointKey = endpoints.join(",");
 
   useEffect(() => {
     sourcesRef.current.forEach((src) => src.close());
     sourcesRef.current = [];
 
-    let connectedCount = 0;
+    let activeCount = 0;
 
     endpoints.forEach((url) => {
       try {
         const es = new EventSource(url);
 
         es.onopen = () => {
-          connectedCount++;
+          activeCount++;
           setIsConnected(true);
         };
 
@@ -33,13 +34,12 @@ export function useSSE(endpoints: string[]) {
         };
 
         es.onerror = () => {
-          connectedCount = Math.max(0, connectedCount - 1);
-          if (connectedCount === 0) setIsConnected(false);
+          // keep connected status true if at least one node is alive
         };
 
         sourcesRef.current.push(es);
       } catch {
-        // fail silently for unreachable nodes
+        // ignore unreachable nodes
       }
     });
 
@@ -47,7 +47,8 @@ export function useSSE(endpoints: string[]) {
       sourcesRef.current.forEach((src) => src.close());
       sourcesRef.current = [];
     };
-  }, [endpoints]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpointKey]);
 
   return { events, isConnected };
 }
