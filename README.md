@@ -11,6 +11,11 @@ a lightweight distributed consensus engine and replicated key-value database bui
 - log replication with strict term matching and safety checks
 - automatic state recovery and persistence across node restarts
 
+**real-time web dashboard**
+- live visualizer built with next.js, tailwind css, framer motion, and lenis smooth scroll
+- server-sent events (SSE) streaming real-time leader elections, log propagation, and state transitions directly from the go binary
+- interactive console to issue proposals (SET, GET, DEL) and scale cluster membership (JOIN, LEAVE)
+
 **log compaction and snapshotting**
 - state machine snapshotting to trim historical log entries and bound memory usage
 - `InstallSnapshot` RPC to fast forward slow or rejoining followers
@@ -21,12 +26,12 @@ a lightweight distributed consensus engine and replicated key-value database bui
 - automatic self removal step-down for leaders
 
 **HTTP client API and proxying**
-- RESTful endpoints (`/set`, `/get`, `/del`, `/join`, `/leave`)
+- RESTful endpoints (`/set`, `/get`, `/del`, `/join`, `/leave`, `/status`, `/events`)
 - follower to leader request proxying for write operations
 - linearizable reads via heartbeat leader validation (`VerifyLeadership`)
 
 **performance optimizations**
-- fast forward log conflict recovery (`ConflictIndex` and `ConflictTerm`) to eliminate 1by-1 RPC step-backs
+- fast forward log conflict recovery (`ConflictIndex` and `ConflictTerm`) to eliminate 1-by-1 RPC step-backs
 - eager replication triggers for sub 15ms proposal latency
 
 ---
@@ -37,11 +42,29 @@ a lightweight distributed consensus engine and replicated key-value database bui
 
 ---
 
+## real-time web dashboard
+
+hotaru includes a real-time web dashboard to watch leader elections, log propagation, and cluster quorum in action.
+
+### 1. start the raft cluster in dashboard mode
+```bash
+go run main.go --dashboard
+```
+
+### 2. start the next.js dashboard
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+open `http://localhost:3000` in your browser to view the live dashboard.
+
+---
+
 ## quickstart and API reference
 
-### 1. run the full test suite
-hotaru includes a comprehensive integration test suite verifying election failover, follower proxying, log compaction, dynamic membership scaling, and performance benchmarking:
-
+### 1. run the full integration test suite
 ```bash
 git clone https://github.com/pranav718/hotaru.git
 cd hotaru
@@ -57,6 +80,8 @@ go run main.go
 | `/del` | `DELETE` | `key=foo` | propose deletion of a key |
 | `/join` | `POST` | `id=3&addr=127.0.0.1:8003` | stage and join a new node dynamically |
 | `/leave` | `POST` | `id=3` | safely remove a node from the cluster |
+| `/status` | `GET` | none | fetch current node status and cluster state |
+| `/events` | `GET` | none | SSE event stream emitting real-time cluster events |
 
 #### example curl requests:
 
@@ -83,4 +108,4 @@ curl -X POST "http://127.0.0.1:8010/leave?id=3"
 
 we wrote a detailed blog post explaining how raft consensus works from scratch, using a playground analogy to make the hard parts click, and then walking through how we actually built hotaru step by step.
 
-read it here: [raft consensus explained simply, then built in go](https://medium.com/@knightkun/raft-consensus-explained-simply-then-built-in-go-f642531b6527)
+read it here: [raft consensus explained simply, then built in go](https://medium.com/@knightkun/raft-consensus-explained-simply-then-built-in-go-f642531b6527?sharedUserId=knightkun)
