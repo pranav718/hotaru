@@ -35,8 +35,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#09090b] text-[#fafafa]">
-        <LenisProvider>{children}</LenisProvider>
+      <body className="min-h-full flex flex-col bg-[#09090b] text-[#fafafa] bg-[url('/bg.png')] bg-cover bg-fixed bg-center">
+        <div className="min-h-full flex flex-col flex-1 bg-black/40 backdrop-brightness-95">
+          <LenisProvider>{children}</LenisProvider>
+        </div>
       </body>
     </html>
   );

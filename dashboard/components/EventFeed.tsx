@@ -28,7 +28,7 @@ export function EventFeed({ events: initialEvents }: EventFeedProps) {
       <div className="flex items-center justify-between font-mono text-xs">
         <div className="flex items-center gap-2">
           <Radio className="h-4 w-4 text-purple-400 animate-pulse" />
-          <h2 className="font-semibold text-zinc-200 uppercase tracking-wide">
+          <h2 className="font-semibold text-zinc-200 tracking-wide">
             live event stream
           </h2>
           <span className="text-[10px] text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">

@@ -36,7 +36,7 @@ export function EventItem({ event }: EventItemProps) {
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-zinc-200 uppercase text-[11px] tracking-wider">{event.type.replace("_", " ")}</span>
+            <span className="font-semibold text-zinc-200 text-[11px] tracking-wider">{event.type.replace(/_/g, " ").toLowerCase()}</span>
             <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">node-{event.node_id}</span>
             <span className="text-[10px] text-zinc-500">T{event.term}</span>
           </div>

@@ -15,7 +15,7 @@ export function ClusterTopology({ nodes }: ClusterTopologyProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-mono text-sm font-semibold tracking-wide text-zinc-200 uppercase">
+        <h2 className="font-mono text-sm font-semibold tracking-wide text-zinc-200">
           cluster topology & quorum
         </h2>
         <div className="flex items-center gap-3 font-mono text-xs text-zinc-500">

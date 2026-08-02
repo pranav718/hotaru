@@ -80,7 +80,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="font-mono text-sm font-semibold tracking-wide text-zinc-200 uppercase">
+        <h2 className="font-mono text-sm font-semibold tracking-wide text-zinc-200">
           log propagation & commit state
         </h2>
         <div className="space-y-3">

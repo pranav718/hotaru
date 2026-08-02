@@ -64,7 +64,7 @@ export function NodeCard({ node }: NodeCardProps) {
           { label: "log size", val: node.log_length },
         ].map(({ label, val }) => (
           <div key={label} className="bg-zinc-950/40 rounded-lg p-2.5 border border-zinc-800/40">
-            <span className="text-zinc-500 block text-[10px] uppercase tracking-wider mb-0.5">{label}</span>
+            <span className="text-zinc-500 block text-[10px] tracking-wider mb-0.5">{label}</span>
             <span className="text-zinc-200 font-semibold">{val}</span>
           </div>
         ))}
