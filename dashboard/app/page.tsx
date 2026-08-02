@@ -101,17 +101,18 @@ export default function DashboardPage() {
       </section>
 
       <footer className="pt-8 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-zinc-400 gap-2">
-        <div>hotaru raft engine &copy; 2026. built from scratch in go.</div>
+        <div>hotaru raft engine. built from scratch in go.</div>
         <div>
-          read the raft paper breakdown on{" "}
+          read{" "}
           <a
             href="https://medium.com/@knightkun/raft-consensus-explained-simply-then-built-in-go-f642531b6527?sharedUserId=knightkun"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#C9F27D] hover:underline"
           >
-            medium
+            raft consensus, explained simply (then built in go)
           </a>
+          {" "}on medium
         </div>
       </footer>
     </main>

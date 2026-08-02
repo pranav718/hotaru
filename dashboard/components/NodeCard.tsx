@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { HardDrive } from "lucide-react";
 import { ClusterNodeStatus } from "@/types/raft";
 import { cn } from "@/lib/utils";
 
@@ -18,10 +17,10 @@ export function NodeCard({ node }: NodeCardProps) {
   };
 
   const badgeStyles = {
-    Leader: "bg-[#C9F27D]/10 text-[#C9F27D] border-[#C9F27D]/30",
-    Candidate: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-    Follower: "bg-zinc-800 text-zinc-400 border-zinc-700",
-    Offline: "bg-red-500/10 text-red-400 border-red-500/30",
+    Leader: "text-[#C9F27D]",
+    Candidate: "text-amber-400",
+    Follower: "text-zinc-500",
+    Offline: "text-red-400",
   };
 
   return (
@@ -34,23 +33,17 @@ export function NodeCard({ node }: NodeCardProps) {
       className={cn("relative rounded-xl border p-5 transition-colors duration-300 backdrop-blur-md overflow-hidden", roleStyles[node.state] || roleStyles.Follower)}
     >
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/80 border border-zinc-700/50">
-            <HardDrive className="h-4 w-4 text-zinc-300" />
-          </div>
-          <div>
-            <h3 className="font-mono text-sm font-semibold tracking-wide text-zinc-100">node-{node.id}</h3>
-            <p className="text-[11px] font-mono text-zinc-500">port: {8000 + node.id}</p>
-          </div>
+        <div>
+          <h3 className="font-mono text-sm font-semibold tracking-wide text-zinc-100">node-{node.id}</h3>
+          <p className="text-[11px] font-mono text-zinc-500">port: {8000 + node.id}</p>
         </div>
 
         <motion.div
           layout
           key={node.state}
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 400, damping: 20 }}
-          className={cn("flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium border", badgeStyles[node.state])}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className={cn("text-xs font-mono font-medium tracking-wide", badgeStyles[node.state])}
         >
           <span>{node.state.toLowerCase()}</span>
         </motion.div>

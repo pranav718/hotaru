@@ -18,19 +18,15 @@ export function ClusterTopology({ nodes }: ClusterTopologyProps) {
         <h2 className="font-mono text-sm font-semibold tracking-wide text-zinc-200">
           cluster topology & quorum
         </h2>
-        <div className="flex items-center gap-3 font-mono text-xs text-zinc-500">
+        <div className="flex items-center gap-4 font-mono text-xs text-zinc-400">
           {leaderNode && (
-            <div className="flex items-center gap-1.5 text-[#C9F27D] bg-[#C9F27D]/10 border border-[#C9F27D]/20 px-2.5 py-0.5 rounded-full">
-              <span>heartbeat active ({followerCount} peers)</span>
-            </div>
-          )}
-          <div>
-            active:{" "}
-            <span className="text-zinc-300 font-semibold">
-              {nodeList.filter((n) => n.state !== "Offline").length} /{" "}
-              {nodeList.length || 3}
+            <span>
+              heartbeat: <span className="text-[#C9F27D]">active</span>
             </span>
-          </div>
+          )}
+          <span>
+            active: <span className="text-zinc-200">{nodeList.filter((n) => n.state !== "Offline").length} / {nodeList.length || 3}</span>
+          </span>
         </div>
       </div>
 
