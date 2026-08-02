@@ -4,6 +4,22 @@ a lightweight distributed consensus engine and replicated key-value database bui
 
 ---
 
+## contents
+
+- [features](#features)
+- [architecture](#architecture)
+- [real-time web dashboard](#real-time-web-dashboard)
+  - [dashboard preview](#dashboard-preview)
+  - [how to run the web dashboard](#how-to-run-the-web-dashboard)
+  - [using the web dashboard](#using-the-web-dashboard)
+- [quickstart and API reference](#quickstart-and-api-reference)
+- [project structure](#project-structure)
+- [how raft works in hotaru](#how-raft-works-in-hotaru)
+- [blog](#blog)
+- [acknowledgments](#acknowledgments)
+
+---
+
 ## features
 
 **core raft consensus**
@@ -132,8 +148,68 @@ curl -X POST "http://127.0.0.1:8010/leave?id=3"
 
 ---
 
+## project structure
+
+```
+hotaru/
+├── main.go                    # entry point, cluster bootstrap, dashboard flag
+├── go.mod
+├── architecture.png
+├── raft/
+│   ├── raft.go                # core raft node state machine
+│   ├── election.go            # leader election and vote handling
+│   ├── replication.go         # log replication and AppendEntries
+│   ├── rpc.go                 # RequestVote, AppendEntries, InstallSnapshot RPCs
+│   ├── persistence.go         # state persistence and recovery
+│   ├── kvstore.go             # replicated key-value state machine
+│   ├── http.go                # HTTP API server and SSE event streaming
+│   └── events.go              # event types and SSE broadcast
+└── dashboard/
+    ├── app/
+    │   ├── layout.tsx          # root layout with bg.png backdrop
+    │   ├── page.tsx            # main dashboard page
+    │   └── globals.css         # global styles and tailwind config
+    ├── components/
+    │   ├── ClusterTopology.tsx  # cluster topology header and node grid
+    │   ├── NodeCard.tsx         # individual node status card
+    │   ├── ControlPanel.tsx     # interactive console (kv store + membership)
+    │   ├── LogBar.tsx           # per-node log propagation bar
+    │   ├── LogEntry.tsx         # individual log entry pill
+    │   ├── EventFeed.tsx        # live event stream container
+    │   ├── EventItem.tsx        # individual event log row
+    │   ├── InteractiveLink.tsx  # micro-interaction hover links
+    │   └── LenisProvider.tsx    # smooth scroll provider
+    ├── hooks/
+    │   └── useClusterData.ts   # SSE connection and cluster state hook
+    ├── types/
+    │   └── raft.ts             # typescript type definitions
+    └── public/
+        └── bg.png              # dashboard background texture
+```
+
+---
+
+## how raft works in hotaru
+
+hotaru implements the raft consensus algorithm in three phases:
+
+1. **leader election**: when a cluster starts (or the current leader goes silent), nodes run randomized election timeouts. the first node to time out becomes a candidate, requests votes from peers, and wins if it gets a majority. randomized timeouts (150ms to 300ms) prevent split votes.
+
+2. **log replication**: once a leader is elected, all client write requests (`SET`, `DEL`) go through it. the leader appends the command to its local log, then replicates it to followers via `AppendEntries` RPCs. once a majority of nodes have the entry, the leader commits it and applies it to the key-value state machine.
+
+3. **safety and persistence**: each node persists its current term, voted-for state, and log to disk. if a node crashes and restarts, it recovers from disk and rejoins the cluster. the leader's log is always authoritative, followers that fall behind get fast-forwarded via conflict resolution or `InstallSnapshot`.
+
+---
+
 ## blog
 
 i wrote a detailed blog post explaining how raft consensus works from scratch, using a playground analogy to make the hard parts click, and then walking through how i actually built hotaru step by step.
 
 read it here: [raft consensus explained simply, then built in go](https://medium.com/@knightkun/raft-consensus-explained-simply-then-built-in-go-f642531b6527?sharedUserId=knightkun)
+
+---
+
+## acknowledgments
+
+- [in search of an understandable consensus algorithm](https://raft.github.io/raft.pdf) by diego ongaro and john ousterhout
+- [raft visualization](https://thesecretlivesofdata.com/raft/) for helping internalize the protocol
