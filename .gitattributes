@@ -1,0 +1,2 @@
+# Instruct GitHub Linguist to mark dashboard UI as vendored so Go is the primary repository language
+dashboard/** linguist-vendored=true
