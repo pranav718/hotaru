@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { EventItem } from "./EventItem";
 import { RaftEvent } from "@/types/raft";
@@ -13,6 +13,7 @@ interface EventFeedProps {
 export function EventFeed({ events: initialEvents }: EventFeedProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [frozenEvents, setFrozenEvents] = useState<RaftEvent[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const togglePause = () => {
     if (!isPaused) {
@@ -22,6 +23,15 @@ export function EventFeed({ events: initialEvents }: EventFeedProps) {
   };
 
   const displayedEvents = isPaused ? frozenEvents : initialEvents;
+  const latestTimestamp = displayedEvents[0]?.timestamp;
+
+  useEffect(() => {
+    if (!isPaused && scrollRef.current) {
+      if (scrollRef.current.scrollTop <= 50) {
+        scrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  }, [latestTimestamp, displayedEvents.length, isPaused]);
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3 backdrop-blur-md">
@@ -50,7 +60,11 @@ export function EventFeed({ events: initialEvents }: EventFeedProps) {
         </button>
       </div>
 
-      <div className={`max-h-[360px] min-h-[260px] overflow-y-auto space-y-2 pr-1 scrollbar-thin ${displayedEvents.length === 0 ? "flex items-center justify-center" : ""}`}>
+      <div
+        ref={scrollRef}
+        data-lenis-prevent
+        className={`max-h-[360px] min-h-[260px] overflow-y-auto space-y-2 pr-1 scrollbar-thin ${displayedEvents.length === 0 ? "flex items-center justify-center" : ""}`}
+      >
         {displayedEvents.length === 0 ? (
           <div className="font-mono text-xs text-zinc-500 text-center">
             waiting for cluster events...

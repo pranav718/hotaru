@@ -195,7 +195,7 @@ export function ControlPanel() {
         </div>
       )}
 
-      <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800/80 h-[140px] overflow-y-auto space-y-1.5 text-[11px] text-zinc-300 font-mono scrollbar-thin">
+      <div data-lenis-prevent className="bg-zinc-950 rounded-lg p-3 border border-zinc-800/80 h-[140px] overflow-y-auto space-y-1.5 text-[11px] text-zinc-300 font-mono scrollbar-thin">
         {outputLog.length === 0 ? (
           <div className="text-zinc-600">console output ready...</div>
         ) : (

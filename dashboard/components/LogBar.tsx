@@ -20,7 +20,7 @@ export function LogBar({ nodeId, entries }: LogBarProps) {
         </div>
       </div>
 
-      <div className="relative z-10 flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin">
+      <div data-lenis-prevent className="relative z-10 flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin">
         {entries.length === 0 ? (
           <div className="py-1 font-mono text-xs text-zinc-500">
             no log entries
