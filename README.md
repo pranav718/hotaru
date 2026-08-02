@@ -44,21 +44,49 @@ a lightweight distributed consensus engine and replicated key-value database bui
 
 ## real-time web dashboard
 
-hotaru includes a real-time web dashboard to watch leader elections, log propagation, and cluster quorum in action.
+hotaru includes an interactive real-time dashboard built with next.js and tailwind css that connects directly to the go cluster via server-sent events (SSE).
 
-### 1. start the raft cluster in dashboard mode
+### dashboard preview
+
+![hotaru web dashboard cluster topology](docs/dashboard-overview.png)
+
+*cluster topology view displaying leader status, follower roles, terms, commit indices, and live state transitions.*
+
+![hotaru interactive console and log propagation](docs/dashboard-console.png)
+
+*interactive console and log propagation visualizer showing real-time log entries replicated across all nodes.*
+
+---
+
+### how to run the web dashboard
+
+#### 1. start the raft cluster in dashboard mode
+in your terminal, launch the 3-node go cluster with dashboard mode enabled:
 ```bash
 go run main.go --dashboard
 ```
+*this starts three raft nodes on ports 8000, 8001, and 8002, with HTTP API / SSE servers listening on ports 8010, 8011, and 8012.*
 
-### 2. start the next.js dashboard
+#### 2. start the next.js dashboard frontend
+in a separate terminal window, start the next.js development server:
 ```bash
 cd dashboard
 npm install
 npm run dev
 ```
 
-open `http://localhost:3000` in your browser to view the live dashboard.
+open `http://localhost:3000` in your browser.
+
+---
+
+### using the web dashboard
+
+- **cluster topology & quorum**: monitor active node roles (`leader`, `follower`), term numbers, commit indices, last applied entries, and total log sizes in real time.
+- **log propagation & commit state**: view uncommitted vs. committed log entries replicated live across `node-0`, `node-1`, and `node-2`.
+- **live event stream**: watch real-time cluster events (leader heartbeats, elections, proposals, snapshot saves) emitted via SSE.
+- **interactive console**:
+  - **kv store tab**: target any cluster node (e.g. `node-0 (:8010)`) and execute `SET`, `GET`, or `DEL` operations directly.
+  - **membership tab**: dynamically propose `JOIN` or `LEAVE` operations to add or remove nodes live without cluster downtime.
 
 ---
 
@@ -106,6 +134,6 @@ curl -X POST "http://127.0.0.1:8010/leave?id=3"
 
 ## blog
 
-we wrote a detailed blog post explaining how raft consensus works from scratch, using a playground analogy to make the hard parts click, and then walking through how we actually built hotaru step by step.
+i wrote a detailed blog post explaining how raft consensus works from scratch, using a playground analogy to make the hard parts click, and then walking through how i actually built hotaru step by step.
 
 read it here: [raft consensus explained simply, then built in go](https://medium.com/@knightkun/raft-consensus-explained-simply-then-built-in-go-f642531b6527?sharedUserId=knightkun)
