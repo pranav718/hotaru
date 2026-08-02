@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Terminal, Send, Search, Trash2, UserPlus, UserMinus } from "lucide-react";
+import { Terminal, Send, Search, Trash2, UserPlus, UserMinus, ChevronDown } from "lucide-react";
 
 export function ControlPanel() {
   const [targetPort, setTargetPort] = useState(8010);
@@ -158,16 +158,25 @@ export function ControlPanel() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-zinc-500">target:</span>
-          <select
-            value={targetPort}
-            onChange={(e) => setTargetPort(Number(e.target.value))}
-            className="bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1 text-zinc-200 focus:outline-none focus:border-zinc-700 text-xs"
-          >
-            <option value={8010}>node-0 (:8010)</option>
-            <option value={8011}>node-1 (:8011)</option>
-            <option value={8012}>node-2 (:8012)</option>
-          </select>
+          <span className="text-[11px] text-zinc-500 font-mono">target:</span>
+          <div className="relative inline-block">
+            <select
+              value={targetPort}
+              onChange={(e) => setTargetPort(Number(e.target.value))}
+              className="appearance-none bg-zinc-900 border border-zinc-800 rounded-lg pl-3 pr-8 py-1 text-zinc-200 hover:text-zinc-100 hover:border-zinc-700 hover:bg-zinc-800/80 focus:outline-none focus:border-cyan-500/50 transition-all text-xs font-mono cursor-pointer shadow-sm"
+            >
+              <option value={8010} className="bg-zinc-900 text-zinc-200">
+                node-0 (:8010)
+              </option>
+              <option value={8011} className="bg-zinc-900 text-zinc-200">
+                node-1 (:8011)
+              </option>
+              <option value={8012} className="bg-zinc-900 text-zinc-200">
+                node-2 (:8012)
+              </option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+          </div>
         </div>
       </div>
 
